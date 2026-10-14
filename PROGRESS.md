@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Testnet read client — configurable contract ID and RPC endpoint
+
+- **What:** Replaces the hard-coded `CONTRACT_ID` and `RPC_URL` in `client/src/index.ts` with `--contract` and `--rpc` CLI flags, with `DEPRADAR_CONTRACT_ID` and `DEPRADAR_RPC_URL` environment variables as fallbacks, defaulting to the current testnet deployment values. Updates `client/README.md` with usage examples and options table.
+- **Verified:** `npm run typecheck` passes in `client/`. Tested live reads against Stellar testnet with default flags and explicit `--contract` and `--rpc` options.
+- **By:** dezzy-music
+- **Closes:** #183
+- **Status:** PR open.
