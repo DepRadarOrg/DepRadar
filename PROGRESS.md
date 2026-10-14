@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Documentation — PR review process & issue picking guide
+
+- **What:** Expands `CONTRIBUTING.md` with a "Picking an Issue" section guiding contributors on Stellar Wave bounty tracking and area labels, and a comprehensive "Review Process" section detailing response times (24–48 hours), the 7-item reviewer checklist, and common reasons for requested changes.
+- **Verified:** All links, Markdown syntax, and section references verified.
+- **By:** dezzy-music
+- **Closes:** #175
+- **Status:** PR open.
