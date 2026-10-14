@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Devex — Pin the Rust toolchain
+
+- **What:** Adds `rust-toolchain.toml` pinning the Rust compiler channel to `1.94.1` with `rustfmt`, `clippy` components and the `wasm32v1-none` Soroban contract compilation target. Updates `CONTRIBUTING.md` with instructions on how contributors and maintainers can bump the pinned toolchain.
+- **Verified:** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, and `cargo build -p deprader-router --target wasm32v1-none --release --locked` all pass under the pinned toolchain.
+- **By:** dezzy-music
+- **Closes:** #159
+- **Status:** PR open.

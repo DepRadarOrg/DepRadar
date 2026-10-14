@@ -9,8 +9,17 @@ open a PR that references it.
 Prerequisites: a stable Rust toolchain, the `wasm32v1-none` target (for the
 contract), and Node.js 22+ (for `client/`).
 
-```bash
-rustup target add wasm32v1-none
+The Rust toolchain, its components (`rustfmt`, `clippy`), and the `wasm32v1-none`
+target are pinned in [`rust-toolchain.toml`](rust-toolchain.toml). When using
+`rustup`, invoking any `cargo` command inside the repo automatically installs
+and selects the pinned version.
+
+### Bumping the Rust Toolchain
+To bump the Rust version:
+1. Update `channel = "..."` in `rust-toolchain.toml` to the new target version.
+2. Run `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets --locked -- -D warnings` to verify new lints.
+3. Verify tests and the wasm build: `cargo test --workspace --locked` and `cargo build -p deprader-router --target wasm32v1-none --release --locked`.
+4. Update `PROGRESS.md` and submit a PR with the bump.
 
 # Off-chain toolkit + contract unit tests
 cargo test --workspace --locked
