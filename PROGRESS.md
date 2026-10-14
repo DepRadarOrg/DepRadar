@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Documentation — Issue and PR labels guide
+
+- **What:** Adds a comprehensive "Labels" guide to `CONTRIBUTING.md` documenting every label used in the repository, organized into clear categories: Program & Onboarding (`Stellar Wave`, `good first issue`, `help wanted`), Subsystems & Modules (`contract`, `frontend`, `client`, `cli`, `typosquat`, `cve`, `scanner`, `crawler`, `behavioral`, `wallet`, `drips`, `data`), Ecosystems (`npm`, `pypi`, `crates`), and Engineering & Quality (`ci`, `devex`, `tooling`, `testing`, `security`, `performance`, `design`, `accessibility`, `documentation`, `bug`, `enhancement`).
+- **Verified:** All referenced filepaths and ecosystem descriptions verified against codebase structure.
+- **By:** dezzy-music
+- **Closes:** #185
+- **Status:** PR open.

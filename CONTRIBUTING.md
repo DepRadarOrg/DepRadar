@@ -57,6 +57,47 @@ describing what was built, by whom, and which issue it closes. This is
 called out explicitly in the Definition of Done on the issue templates
 (`.github/ISSUE_TEMPLATE/`), but it applies to any issue, templated or not.
 
+## Labels
+
+Issues and pull requests use labels to categorize work by program, subsystem, ecosystem, and cross-cutting engineering concerns:
+
+### Program & Onboarding
+- `Stellar Wave`: Tasks eligible for bounties and tracking under the Drips Stellar Wave program.
+- `good first issue`: Self-contained tasks with clear scope, recommended for newcomers.
+- `help wanted`: Tasks needing community input or specific domain expertise.
+
+### Subsystems & Modules
+- `contract`: Soroban smart contract logic, tests, and storage in `contracts/deprader_router/`.
+- `frontend`: Web dashboard UI, state management, and components in `frontend/`.
+- `client`: Minimal testnet read client CLI in `client/`.
+- `cli`: Core `depradar` command-line tool in `src/bin/`.
+- `typosquat`: Package name similarity scoring, edit distance, and homoglyphs in `src/typosquat/`.
+- `cve`: Known-vulnerability detection and OSV API client in `src/cve/`.
+- `scanner`: Lockfile parsing and scan pipeline integration.
+- `crawler`: Package registry crawlers and upstream update monitors.
+- `behavioral`: Behavioral heuristics and package execution analysis.
+- `wallet`: Wallet-connected transactions and signing interactions.
+- `drips`: Payout streaming and Drips protocol distribution.
+- `data`: Reference datasets in `data/popular-packages/`.
+
+### Ecosystems
+- `npm`: Node.js / npm package ecosystem.
+- `pypi`: Python / PyPI package ecosystem.
+- `crates`: Rust / crates.io package ecosystem.
+
+### Engineering & Quality
+- `ci`: CI workflows, automated checks, and release automation.
+- `devex`: Tooling, developer configuration, and contributor workflow.
+- `tooling`: Scripts and automation helpers.
+- `testing`: Unit, integration, and contract tests, plus fixtures.
+- `security`: Security hardening, threat models, and vulnerability fixes.
+- `performance`: Execution speed, bundle size, gas/resource optimization.
+- `design`: Visual design, theme design tokens, and UI layout.
+- `accessibility`: WCAG conformance, keyboard navigation, and screen reader support.
+- `documentation`: Guides, READMEs, architectural docs, and docstrings.
+- `bug`: Defects breaking expected functionality.
+- `enhancement`: New capabilities or improvements to existing functionality.
+
 ## Testnet Identities
 
 Don't share or commit Stellar secret keys, including testnet ones. Generate
