@@ -796,6 +796,40 @@ a.card:hover {
   flex-direction: column;
   border-color: rgba(248, 113, 113, 0.5);
 }
+.empty-cta {
+  flex-direction: column;
+  max-width: 680px;
+  margin: 0 auto;
+  gap: 1rem;
+}
+.empty-cta-title {
+  font: 600 1.25rem var(--display);
+  color: var(--text-h);
+}
+.empty-cta-desc {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 540px;
+  margin: 0 auto;
+}
+.empty-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+.btn-primary {
+  background: var(--teal);
+  color: #060a14 !important;
+  border-color: var(--teal);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background: #2dd4bf;
+  color: #060a14 !important;
+}
 .spinner {
   width: 16px;
   height: 16px;

@@ -91,3 +91,47 @@ export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => v
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="state muted">{children}</div>;
 }
+
+export function EmptyCTA({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="state empty-cta" role="region" aria-label="No bounties call to action">
+      <div className="empty-cta-title">{title}</div>
+      {description && <p className="empty-cta-desc muted">{description}</p>}
+      <div className="empty-cta-actions">
+        <a
+          href="https://github.com/DepRadarOrg/DepRadar/blob/main/docs/TUTORIAL.md"
+          target="_blank"
+          rel="noreferrer"
+          className="btn btn-primary"
+        >
+          Read the Tutorial
+        </a>
+        <a
+          href="https://github.com/DepRadarOrg/DepRadar/blob/main/CONTRIBUTING.md"
+          target="_blank"
+          rel="noreferrer"
+          className="btn"
+        >
+          Contributing Guide
+        </a>
+        <a
+          href="https://github.com/DepRadarOrg/DepRadar/issues"
+          target="_blank"
+          rel="noreferrer"
+          className="btn"
+        >
+          Browse GitHub Issues
+        </a>
+        {children}
+      </div>
+    </div>
+  );
+}

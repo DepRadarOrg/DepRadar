@@ -1,7 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { BountyCard, BountyCardSkeleton } from "../components/BountyCard";
 import { Radar } from "../components/Radar";
-import { Empty, ErrorState, Skeleton } from "../components/ui";
+import { EmptyCTA, ErrorState, Skeleton } from "../components/ui";
 import { listBounties } from "../lib/contract";
 import { formatAmount } from "../lib/format";
 import { boardStats } from "../lib/insights";
@@ -74,11 +74,14 @@ export function BountyList() {
         {state.status === "error" && <ErrorState error={state.error} onRetry={state.reload} />}
         {state.status === "success" &&
           (shown.length === 0 ? (
-            <Empty>
-              {bounties.length === 0
-                ? "No bounties yet — the radar is quiet."
-                : `No ${filter.label.toLowerCase()} bounties right now.`}
-            </Empty>
+            <EmptyCTA
+              title={
+                bounties.length === 0
+                  ? "No bounties yet — the radar is quiet."
+                  : `No ${filter.label.toLowerCase()} bounties right now.`
+              }
+              description="DepRadar coordinates security bounties for dependency typosquats and supply-chain vulnerabilities on Stellar. Creators lock XLM rewards against security findings, and researchers earn bounties by discovering and submitting verifiable proof."
+            />
           ) : (
             <div className="grid">
               {shown.map((b) => (

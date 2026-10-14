@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Frontend — Empty-state call to action for researchers
+
+- **What:** In `frontend/src/components/ui.tsx` and `frontend/src/pages/BountyList.tsx`, introduces `EmptyCTA` when there are no open bounties or filtered results. Explains how bounties work and provides direct action links to `docs/TUTORIAL.md`, `CONTRIBUTING.md`, and the GitHub issues board. Added unit test in `frontend/src/components/ui.test.tsx` (now 22 tests).
+- **Verified:** `oxlint` (0 warnings), `typecheck` (`tsc -b`), `vitest run` (22/22 passed), and `vite build` all pass cleanly. Visual appearance verified in browser with full-page screenshot at `assets/empty-state-cta.png`.
+- **By:** dezzy-music
+- **Closes:** #182
+- **Status:** PR open.
