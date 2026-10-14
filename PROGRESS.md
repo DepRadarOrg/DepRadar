@@ -319,3 +319,16 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Web dashboard — Open Graph and Twitter card tags
+
+- **What:** Shared dashboard links previously showed no preview card. Added
+  `og:title`, `og:description`, `og:type`, `og:url`, `og:image`
+  (1200×630 PNG in `frontend/public/og-image.png`) plus `og:image:width` /
+  `og:image:height` / `og:image:type` and matching `twitter:card`
+  `summary_large_image` tags to `frontend/index.html`. The card is derived
+  from `assets/banner.svg` — same background gradient, teal→blue title
+  gradient, radar mark, and "LIVE ON STELLAR TESTNET" pill.
+- **By:** Adventure Agent
+- **Closes:** #169
+- **Status:** Open PR.
