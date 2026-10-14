@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Documentation — Project and contract FAQ
+
+- **What:** Adds `docs/FAQ.md` answering 12 core questions regarding DepRadar's architecture, testnet contract deployment, finding eligibility criteria, multi-claim spam protection, admin rotation, escrow lock and payout lifecycle, cancellation and review windows, and responsible disclosure. Links the FAQ from `README.md`.
+- **Verified:** All links, contract IDs, and references cross-checked with `README.md`, `SECURITY.md`, and `contracts/deprader_router/src/lib.rs`.
+- **By:** dezzy-music
+- **Closes:** #160
+- **Status:** PR open.
