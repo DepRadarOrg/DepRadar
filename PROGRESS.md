@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Security — Threat model for the bounty router contract
+
+- **What:** Adds `docs/threat-model.md` documenting the security architecture, actors, assets, trust boundaries, and analysis of 7 threat vectors (claim squatting, admin key compromise, malicious re-entrant tokens, claim spam denial-of-service, indefinite fund lockup, storage TTL expiration, and reference string bloat). Connects mitigations to related issues (#171, #172, #173, #162) and links the document from `README.md`.
+- **Verified:** All links, issue references, and contract architectural properties verified against `contracts/deprader_router/src/lib.rs`.
+- **By:** dezzy-music
+- **Closes:** #156
+- **Status:** PR open.
