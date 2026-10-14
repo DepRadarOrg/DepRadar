@@ -165,6 +165,13 @@ Thanks to everyone who has shipped code into this repo:
 Want to add your name to this list? Pick an open issue and read
 [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
+## Documentation
+
+- [Tutorial: Report Your First Typosquat](docs/tutorial.md) — Step-by-step walkthrough from scanning a package name with `scan` to submitting and releasing an on-chain bounty.
+- [Contributing Guide](CONTRIBUTING.md) — Development setup, issue labels, and PR review workflow.
+- [Security Policy](SECURITY.md) — Responsible vulnerability disclosure instructions.
+- [Progress Log](PROGRESS.md) — Running record of shipped modules and completed issues.
+
 ## Security
 
 Found a vulnerability in DepRadar itself? Please report it privately — see

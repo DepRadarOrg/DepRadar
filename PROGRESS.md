@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Documentation — Tutorial: "Report your first typosquat"
+
+- **What:** Adds `docs/tutorial.md` walking developers and security researchers through the end-to-end flow from candidate discovery to on-chain payment: running `cargo run --bin scan`, evaluating edit distance and homoglyph impersonations, reporting upstream to registries, querying and claiming bounties on testnet, inspecting claims via the read client and dashboard, and releasing payouts.
+- **Verified:** All CLI commands (`cargo run --bin scan`, `client/ npm start`) were run and verified with real live testnet output.
+- **By:** dezzy-music
+- **Closes:** #158
+- **Status:** PR open.
