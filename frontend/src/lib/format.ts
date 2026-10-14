@@ -53,3 +53,78 @@ export function splitIssueRef(ref: string): { ecosystem: string | null; text: st
   const m = /^([a-z0-9.-]{2,12}):\s*(.+)$/i.exec(ref);
   return m ? { ecosystem: m[1].toLowerCase(), text: m[2] } : { ecosystem: null, text: ref };
 }
+
+export interface FindingRef {
+  ecosystem: string;
+  package: string;
+  version: string | null;
+  kind: string;
+  advisory: string | null;
+}
+
+/**
+ * Formats a `FindingRef` into standard format:
+ * `<ecosystem>:<package>[@<version>]#<kind>[:<advisory>]`
+ */
+export function formatIssueRef(finding: FindingRef): string {
+  let out = `${finding.ecosystem.toLowerCase()}:${finding.package}`;
+  if (finding.version) {
+    out += `@${finding.version}`;
+  }
+  out += `#${finding.kind.toLowerCase()}`;
+  if (finding.advisory) {
+    out += `:${finding.advisory}`;
+  }
+  return out;
+}
+
+/**
+ * Parses a standard finding reference:
+ * `<ecosystem>:<package>[@<version>]#<kind>[:<advisory>]`
+ */
+export function parseIssueRef(input: string): FindingRef | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const colonIdx = trimmed.indexOf(":");
+  if (colonIdx <= 0) return null;
+
+  const ecosystem = trimmed.slice(0, colonIdx).trim().toLowerCase();
+  const rest = trimmed.slice(colonIdx + 1);
+
+  const hashIdx = rest.indexOf("#");
+  if (hashIdx <= 0) return null;
+
+  const pkgVer = rest.slice(0, hashIdx).trim();
+  const kindAdv = rest.slice(hashIdx + 1).trim();
+
+  let packageStr = pkgVer;
+  let version: string | null = null;
+  const lastAt = pkgVer.lastIndexOf("@");
+  if (lastAt > 0) {
+    packageStr = pkgVer.slice(0, lastAt).trim();
+    version = pkgVer.slice(lastAt + 1).trim() || null;
+  }
+
+  if (!packageStr) return null;
+
+  let kind = kindAdv;
+  let advisory: string | null = null;
+  const advColon = kindAdv.indexOf(":");
+  if (advColon >= 0) {
+    kind = kindAdv.slice(0, advColon).trim().toLowerCase();
+    advisory = kindAdv.slice(advColon + 1).trim() || null;
+  } else {
+    kind = kindAdv.toLowerCase();
+  }
+
+  if (!kind) return null;
+
+  return {
+    ecosystem,
+    package: packageStr,
+    version,
+    kind,
+    advisory,
+  };
+}

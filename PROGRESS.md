@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Scanner / Model — Standard `issue_ref` format for findings
+
+- **What:** Proposes and documents the standard finding reference format `<ecosystem>:<package>[@<version>]#<kind>[:<advisory>]` in `docs/issue-ref.md`. Implements `FindingRef`, `format_issue_ref`, and `parse_issue_ref` in `src/model.rs` (exposed via `src/lib.rs`). Implements mirroring `FindingRef`, `formatIssueRef`, and `parseIssueRef` in `frontend/src/lib/format.ts`.
+- **Verified:** Comprehensive round-trip unit tests in Rust (`src/model.rs`, 30 tests total in crate) and TypeScript (`frontend/src/lib/format.test.ts`, 25 tests total in dashboard). `cargo fmt`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `npm run lint` (0 warnings), `tsc -b`, and `vite build` all pass cleanly.
+- **By:** dezzy-music
+- **Closes:** #162
+- **Status:** PR open.
