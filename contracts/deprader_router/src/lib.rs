@@ -82,6 +82,15 @@ pub struct Claim {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Config {
+    pub review_window_secs: u64,
+    pub max_bounty_duration_secs: u64,
+    pub max_claims_per_bounty: u32,
+    pub max_ref_len: u32,
+}
+
+#[contracttype]
 enum DataKey {
     Admin,
     PendingAdmin,
@@ -247,6 +256,16 @@ impl DepRaderRouter {
             .get(&DataKey::NextBountyId)
             .unwrap_or(1);
         next - 1
+    }
+
+    /// Returns the contract's fixed operational limits.
+    pub fn get_config(_env: Env) -> Config {
+        Config {
+            review_window_secs: REVIEW_WINDOW_SECS,
+            max_bounty_duration_secs: MAX_BOUNTY_DURATION_SECS,
+            max_claims_per_bounty: MAX_CLAIMS_PER_BOUNTY,
+            max_ref_len: MAX_REF_LEN,
+        }
     }
 
     /// Refunds an open bounty to its creator.

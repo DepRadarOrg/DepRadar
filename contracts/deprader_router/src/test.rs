@@ -1,6 +1,6 @@
 use super::{
-    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error,
-    MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, REVIEW_WINDOW_SECS,
+    BountyStatus, ClaimStatus, Config, DepRaderRouter, DepRaderRouterClient, Error,
+    MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, MAX_REF_LEN, REVIEW_WINDOW_SECS,
 };
 use soroban_sdk::{
     symbol_short,
@@ -118,6 +118,21 @@ fn test_create_requires_initialized_contract() {
         &DEADLINE,
     );
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
+}
+
+#[test]
+fn test_get_config_matches_constants() {
+    let t = setup();
+    let config = t.client.get_config();
+    assert_eq!(
+        config,
+        Config {
+            review_window_secs: REVIEW_WINDOW_SECS,
+            max_bounty_duration_secs: MAX_BOUNTY_DURATION_SECS,
+            max_claims_per_bounty: MAX_CLAIMS_PER_BOUNTY,
+            max_ref_len: MAX_REF_LEN,
+        }
+    );
 }
 
 // ------------------------------------------------------------ create_bounty

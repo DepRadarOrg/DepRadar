@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Contract — `get_config` getter for operational limits
+
+- **What:** In `contracts/deprader_router/src/lib.rs`, introduces `Config` struct (`review_window_secs`, `max_bounty_duration_secs`, `max_claims_per_bounty`, `max_ref_len`) and `get_config(env) -> Config` on `DepRaderRouter` so frontends and clients can dynamically read operational parameters without hardcoding constants. Added unit test `test_get_config_matches_constants` in `contracts/deprader_router/src/test.rs`.
+- **Verified:** `cargo test --workspace --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo build -p deprader-router --target wasm32v1-none --release --locked` pass.
+- **By:** dezzy-music
+- **Closes:** #173
+- **Status:** PR open.
