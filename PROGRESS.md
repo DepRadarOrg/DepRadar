@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Security — `cargo deny` for licenses and duplicate dependencies
+
+- **What:** Adds `deny.toml` configuring license allowances (MIT, Apache-2.0, BSD-1/2/3-Clause, ISC, Unicode, Unlicense, Zlib, BSL-1.0, CDLA-Permissive-2.0, CC0-1.0), denying unknown registries and unknown git sources. Integrates `cargo-deny` check via `EmbarkStudios/cargo-deny-action@v2` into `.github/workflows/audit.yml`.
+- **Verified:** `.github/workflows/audit.yml` and `deny.toml` syntax validated; all dependency licenses verified against crates.io metadata.
+- **By:** dezzy-music
+- **Closes:** #163
+- **Status:** PR open.
