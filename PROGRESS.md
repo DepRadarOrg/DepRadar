@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Contract — Reject self-claims by the bounty creator
+
+- **What:** In `contracts/deprader_router/src/lib.rs`, adds `Error::CreatorCannotClaim = 20` and enforces `if claimant == bounty.creator { return Err(Error::CreatorCannotClaim); }` in `submit_claim` so bounty creators cannot claim their own bounties. Added unit test `test_creator_cannot_claim_own_bounty` in `test.rs`.
+- **Verified:** `cargo test --workspace --locked` (22 contract tests, 26 crate tests), `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo build -p deprader-router --target wasm32v1-none --release --locked` all pass cleanly.
+- **By:** dezzy-music
+- **Closes:** #171
+- **Status:** PR open.

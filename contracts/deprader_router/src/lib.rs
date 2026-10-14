@@ -109,6 +109,7 @@ pub enum Error {
     ClaimNotPending = 17,
     CancelTooEarly = 18,
     NoPendingAdmin = 19,
+    CreatorCannotClaim = 20,
 }
 
 #[contract]
@@ -313,6 +314,9 @@ impl DepRaderRouter {
         let mut bounty: Bounty = get_persistent(&env, &key).ok_or(Error::BountyNotFound)?;
         if bounty.status != BountyStatus::Open {
             return Err(Error::BountyNotOpen);
+        }
+        if claimant == bounty.creator {
+            return Err(Error::CreatorCannotClaim);
         }
         let now = env.ledger().timestamp();
         if now >= bounty.deadline {

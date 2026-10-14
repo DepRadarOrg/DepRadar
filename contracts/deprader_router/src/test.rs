@@ -243,6 +243,19 @@ fn test_submit_claim_rejects_duplicates_and_bad_input() {
 }
 
 #[test]
+fn test_creator_cannot_claim_own_bounty() {
+    let t = setup();
+    let bounty_id = t.create();
+
+    assert_eq!(
+        t.client
+            .try_submit_claim(&bounty_id, &t.creator, &t.s("self-claim")),
+        Err(Ok(Error::CreatorCannotClaim))
+    );
+    assert_eq!(t.client.get_bounty(&bounty_id).unwrap().claim_count, 0);
+}
+
+#[test]
 fn test_submit_claim_after_deadline_fails() {
     let t = setup();
     let bounty_id = t.create();
