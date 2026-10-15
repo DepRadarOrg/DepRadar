@@ -319,3 +319,17 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Contributing docs — Labels section
+
+- **What:** Adds a **Labels** section to `CONTRIBUTING.md` documenting every
+  area label (`typosquat`, `scanner`, `contract`, `frontend`, …) and every
+  workflow label (`bug`, `good first issue`, `Stellar Wave`, …), split into
+  two tables, with guidance on when each is used. Notes that `Stellar Wave`
+  is maintainer-applied for Drips funding eligibility and should not be
+  self-assigned.
+- **Verified:** every label name and description matches the live label set
+  on the repository; the Drips link resolves.
+- **By:** Reggiebro
+- **Closes:** #185
+- **Status:** Merged.

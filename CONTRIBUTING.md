@@ -50,6 +50,60 @@ Some tests in `src/cve/` call the live [OSV API](https://osv.dev); they skip
 - Security-sensitive findings go through [SECURITY.md](SECURITY.md), not
   public issues.
 
+## Labels
+
+Issues and pull requests are organised with two kinds of labels: **area**
+labels that point at the part of the codebase involved, and **workflow**
+labels that describe triage state. Use one area label per issue; add more
+only when a change genuinely spans several areas.
+
+### Area labels
+
+| Label | Use it for |
+|---|---|
+| `typosquat` | Typosquat detection (`src/typosquat/`) |
+| `scanner` | Lockfile parsing and the scan pipeline |
+| `crawler` | Registry crawlers and monitors |
+| `cve` | Known-vulnerability matching (`src/cve/`) |
+| `contract` | The Soroban bounty-router contract |
+| `client` | Testnet read client (`client/`) |
+| `frontend` | Web dashboard (`frontend/`) |
+| `wallet` | Wallet-connected write actions |
+| `cli` | The `depradar` command-line tool |
+| `npm` | npm ecosystem |
+| `pypi` | PyPI ecosystem |
+| `crates` | crates.io ecosystem |
+| `drips` | Drips integration |
+| `data` | Datasets |
+| `security` | Security hardening or detection |
+| `performance` | Speed, size or resource usage |
+| `accessibility` | Barrier affecting people with disabilities |
+| `behavioral` | Behavioral / malware heuristics |
+| `testing` | Tests, fixtures and test infrastructure |
+| `ci` | CI, release and automation |
+| `devex` | Developer experience and tooling |
+| `tooling` | Scripts and tooling |
+| `design` | Visual and UX design |
+
+### Workflow labels
+
+| Label | Meaning |
+|---|---|
+| `bug` | Something isn't working |
+| `enhancement` | New feature or request |
+| `documentation` | Improvements or additions to documentation |
+| `question` | Further information is requested |
+| `good first issue` | Good for newcomers — self-contained and low-risk |
+| `help wanted` | Extra attention is needed |
+| `duplicate` | This issue or pull request already exists |
+| `invalid` | This doesn't seem right |
+| `wontfix` | This will not be worked on |
+| `Stellar Wave` | Eligible for the Drips Stellar Wave program |
+
+`Stellar Wave` is applied by maintainers to issues that qualify for the
+[Drips](https://www.drips.network) funding round — don't add it yourself,
+but you may filter by it to find work that's eligible for a payout.
+
 ## Closing Issues
 
 No issue is closed without an entry in [PROGRESS.md](PROGRESS.md)
