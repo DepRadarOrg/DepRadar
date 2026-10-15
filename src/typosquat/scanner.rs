@@ -9,6 +9,8 @@
 
 use std::fmt;
 
+use serde::Serialize;
+
 use super::dataset::load_popular_packages;
 use super::distance::nearest_match;
 use super::homoglyph::homoglyph_impersonation;
@@ -24,7 +26,7 @@ pub const DISTANCE_THRESHOLD: usize = 2;
 
 /// Result of scoring a candidate package name against both typosquat
 /// signals.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ScanResult {
     /// The name that was scored, as given by the caller.
     pub candidate: String,
@@ -36,6 +38,9 @@ pub struct ScanResult {
     /// lookalike characters are folded back to Latin, is a popular package:
     /// the matched name.
     pub homoglyph_match: Option<String>,
+    /// Popularity rank (lower is more popular) of the popular package matched
+    /// by either signal, when one fired. `None` when no signal fired.
+    pub rank: Option<usize>,
 }
 
 impl ScanResult {
@@ -76,15 +81,25 @@ pub fn score_package(name: &str) -> ScanResult {
     let dataset = load_popular_packages();
 
     let (nearest_name, distance) = nearest_match(name, &dataset);
-    let distance_match =
-        (distance > 0 && distance <= DISTANCE_THRESHOLD).then_some((nearest_name, distance));
+    let distance_match = (distance > 0 && distance <= DISTANCE_THRESHOLD)
+        .then_some((nearest_name.clone(), distance));
 
     let homoglyph_match = homoglyph_impersonation(name, &dataset);
+
+    let rank = distance_match
+        .as_ref()
+        .and_then(|(matched, _)| super::dataset::rank(matched))
+        .or_else(|| {
+            homoglyph_match
+                .as_ref()
+                .and_then(|matched| super::dataset::rank(matched))
+        });
 
     ScanResult {
         candidate: name.to_string(),
         distance_match,
         homoglyph_match,
+        rank,
     }
 }
 

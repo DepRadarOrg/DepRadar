@@ -73,6 +73,19 @@ fn parse_string_array(raw: &str) -> Vec<String> {
     out
 }
 
+/// Returns the zero-based position (rank) of `name` in the combined popular
+/// package dataset, or `None` if it is not present.
+///
+/// The dataset is already ordered by popularity within each registry (npm
+/// entries first, then PyPI), so a lower number means a more popular (and
+/// more dangerous to typosquat) target. `load_popular_packages` defines that
+/// order.
+pub fn rank(name: &str) -> Option<usize> {
+    load_popular_packages()
+        .iter()
+        .position(|entry| entry == name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

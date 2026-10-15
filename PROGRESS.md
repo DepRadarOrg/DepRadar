@@ -319,3 +319,34 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### frontend — Open Graph and social preview tags
+
+- **What:** Added `og:*` / Twitter card meta tags to `frontend/index.html` and
+  generated `frontend/public/og-image.png` (1200×630) from `assets/banner.svg`.
+- **By:** kevindurant735rocket-creator
+- **Closes:** #169
+- **Status:** `npm run lint`, `typecheck`, `test` (21 tests) and `build` pass.
+
+### examples — vulnerable-app demo fixture
+
+- **What:** Added `examples/vulnerable-app/` with a minimal npm project whose
+  lockfile pins `lodash@4.17.4` and whose manifest also lists `lodashz`, a
+  non-existent, typosquat-looking package name. README documents expected
+  DepRadar findings (CVE for old lodash, typosquat of lodash, missing
+  resolution) plus verification commands.
+- **By:** kevindurant735rocket-creator
+- **Closes:** #174
+- **Status:** Fixture verified; `package-lock.json` resolves `lodash@4.17.4`
+  and `cargo run --bin scan -- lodashz` reports the typosquat finding.
+
+### typosquat — popularity rank for matches
+
+- **What:** Exposed `typosquat::dataset::rank(name) -> Option<usize>` over the
+  bundled popular-package lists, and carried the matched package's rank in
+  `ScanResult` (serialized as `rank`) plus the scanner's JSON output. Added
+  `--json` to the `scan` binary.
+- **By:** kevindurant735rocket-creator
+- **Closes:** #177
+- **Status:** `cargo fmt`, `cargo clippy --workspace --all-targets --locked -- -D
+  warnings`, and `cargo test --workspace --locked` pass.
