@@ -1,0 +1,10 @@
+{
+  "name": "vulnerable-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Deliberately vulnerable demo project for DepRadar docs, tutorials, and tests.",
+  "dependencies": {
+    "lodash": "4.17.4",
+    "lodashz": "^1.0.0"
+  }
+}
