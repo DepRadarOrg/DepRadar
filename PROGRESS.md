@@ -319,3 +319,11 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### frontend — Open Graph and social preview tags
+
+- **What:** Added `og:*` / Twitter card meta tags to `frontend/index.html` and
+  generated `frontend/public/og-image.png` (1200×630) from `assets/banner.svg`.
+- **By:** kevindurant735rocket-creator
+- **Closes:** #169
+- **Status:** `npm run lint`, `typecheck`, `test` (21 tests) and `build` pass.
