@@ -1,5 +1,5 @@
 use super::{
-    BountyStatus, ClaimStatus, Config, DepRaderRouter, DepRaderRouterClient, Error,
+    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error,
     MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, MAX_REF_LEN, REVIEW_WINDOW_SECS,
 };
 use soroban_sdk::{
