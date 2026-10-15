@@ -1,6 +1,6 @@
 use super::{
-    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error,
-    MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, REVIEW_WINDOW_SECS,
+    BountyStatus, ClaimStatus, Config, DepRaderRouter, DepRaderRouterClient, Error,
+    MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, MAX_REF_LEN, REVIEW_WINDOW_SECS,
 };
 use soroban_sdk::{
     symbol_short,
@@ -512,4 +512,14 @@ fn test_admin_rotation_is_two_step() {
     let (_, claim_id) = t.claim(bounty_id);
     t.client.release(&bounty_id, &claim_id);
     assert_eq!(t.last_auth(), new_admin);
+}
+
+#[test]
+fn test_get_config_matches_constants() {
+    let t = setup();
+    let config = t.client.get_config();
+    assert_eq!(config.review_window_secs, REVIEW_WINDOW_SECS);
+    assert_eq!(config.max_bounty_duration_secs, MAX_BOUNTY_DURATION_SECS);
+    assert_eq!(config.max_claims_per_bounty, MAX_CLAIMS_PER_BOUNTY);
+    assert_eq!(config.max_ref_len, MAX_REF_LEN);
 }

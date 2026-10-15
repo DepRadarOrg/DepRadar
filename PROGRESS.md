@@ -319,3 +319,14 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### deprader_router contract — `get_config` getter
+
+- **What:** Added `Config` struct (`review_window_secs`, `max_bounty_duration_secs`,
+  `max_claims_per_bounty`, `max_ref_len`) and `get_config() -> Config` returning
+  the router's configured limits, so off-chain clients do not hard-code them.
+  Added `test_get_config_matches_constants`.
+- **By:** kevindurant735rocket-creator
+- **Closes:** #173
+- **Status:** `cargo fmt`, `cargo clippy -- -D warnings`, and
+  `cargo test --workspace` (22 tests) pass.
