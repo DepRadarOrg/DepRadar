@@ -319,3 +319,20 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Documentation — comprehensive FAQ
+
+- **What:** Adds `docs/FAQ.md` addressing 13 essential questions across network
+  environment (Stellar testnet deployment and contract ID), security finding
+  definitions (CVEs, typosquats, behavioral analysis), vulnerability reporting
+  workflows (DepRadar private advisories vs. upstream registry disclosures),
+  bounty claim lifecycle (admin review, multi-claim support up to 50 claims,
+  rejection mechanics), cancellation windows (deadline and 7-day review period),
+  two-step admin rotation handshake, Drips payout integration, and read-only
+  inspection options (frontend web dashboard and CLI read client). Links the
+  new FAQ from `README.md`.
+- **Verified:** All internal links, contract methods, constant references,
+  and external URLs verified against repo files and contract source code.
+- **By:** aiwithrajan
+- **Closes:** #160
+- **Status:** PR open.

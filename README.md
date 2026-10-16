@@ -16,6 +16,8 @@ pays out bounties through [Drips](https://www.drips.network/) to whoever
 catches the issue first — verifiably, on-chain, without a foundation or a
 platform sitting between the finder and the payout.
 
+Common architectural, claim lifecycle, and network questions are answered in the [FAQ](docs/FAQ.md).
+
 ## Architecture
 
 ```mermaid
@@ -145,10 +147,11 @@ verified, with the full trail auditable by anyone.
 - Dashboard features: filters, search, live event feed, wallet-connected actions
 - Drips payout integration
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to pick up a module, and
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to pick up a module,
 [open issues](https://github.com/DepRadarOrg/DepRadar/issues) for what's
-currently up for grabs. [PROGRESS.md](PROGRESS.md) tracks what's actually
-landed, module by module.
+currently up for grabs, and [docs/FAQ.md](docs/FAQ.md) for answers to common
+questions. [PROGRESS.md](PROGRESS.md) tracks what's actually landed, module by
+module.
 
 ## Contributors
 
