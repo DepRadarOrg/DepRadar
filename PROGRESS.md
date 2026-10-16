@@ -319,3 +319,88 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+<<<<<<< HEAD
+### typosquat scanner — crates.io popular-package dataset
+
+- **What:** Adds `data/popular-packages/crates-top1000.json`, the top 1000
+  crates by recent (90-day) downloads from the crates.io API, taken on
+  2026-10-16, lowercased and sorted. `load_popular_packages()` now includes
+  it after the npm and PyPI lists, so Rust lookalikes (`serde_json`
+  imitations, `tokio` lookalikes) are scored like everything else. A new
+  `data/popular-packages/README.md` records each file's source and snapshot
+  date. The ecosystem-aware API (#24) doesn't exist yet. The existing
+  `Ecosystem::CratesIo` variant in `cve::osv_client` is there for it to map
+  onto this file.
+- **Tests:** the loader test now also asserts `serde` and `tokio` are
+  present.
+- **By:** Austinaminu2
+- **Closes:** #39
+- **Status:** In review.
+
+### typosquat scanner — dataset validation test
+
+- **What:** A test in `src/typosquat/dataset.rs` loads every bundled
+  popular-package file and checks that each entry has no leading or trailing
+  whitespace, is lowercase, is a valid name on its registry, and is not a
+  duplicate.
+  - npm names are checked against npm's naming rules, including `@scope/`
+    prefixes.
+  - PyPI names are checked against PEP 508, and duplicates are found after
+    PEP 503 normalisation, so `ruamel.yaml` and `ruamel-yaml` count as the
+    same project.
+  - It also checks that each file is a flat JSON array of strings, and that
+    the loader's hand-rolled parser reads it the same way `serde_json` does.
+
+  All failures are reported together, one line per entry. A second test
+  feeds the checks deliberately broken input (whitespace, uppercase, an
+  invalid character, a leading `_`, a duplicate, a PEP 503 duplicate, a
+  non-string element) and asserts each one is caught.
+- **Data fix:** lowercased the 9 mixed-case PyPI entries the new test
+  flagged (`PyWavelets`, `types-PyYAML`, `cx-Oracle`, …).
+- **By:** Austinaminu2
+- **Closes:** #41
+- **Status:** In review.
+
+### typosquat scanner — dataset regeneration script
+
+- **What:** Adds `scripts/update-datasets.py`, a standard-library-only
+  Python script that rebuilds `data/popular-packages/*-top1000.json` from
+  public download stats.
+  - Sources: [`npm-high-impact`](https://github.com/wooorm/npm-high-impact)
+    for npm, [Top PyPI Packages](https://hugovk.dev/top-pypi-packages/) for
+    PyPI, and the crates.io API sorted by recent downloads.
+  - For each registry it keeps the top 1000 valid, distinct names (PEP 503
+    normalised for PyPI) and writes them lowercased and sorted, in the
+    existing two-space JSON format.
+  - It only rewrites a file whose content changed, so a second run leaves no
+    diff.
+  - `data/popular-packages/README.md` documents the sources, how to run the
+    script, and the caveats.
+  - The dataset validation test now covers `crates-top1000.json` as well.
+- **Data:** regenerated the npm and PyPI lists on 2026-10-16, replacing the
+  hand-curated snapshots (808 npm and 526 PyPI names changed). The crates.io
+  list, from #39, came out unchanged. Ranking npm by downloads favours
+  transitive dependencies, so `vue` and `@angular/core` drop out of the top
+  1000. `react`, `express`, `lodash`, `axios`, `requests`, `django`,
+  `serde` and `tokio` all remain.
+- **By:** Austinaminu2
+- **Closes:** #40
+- **Status:** In review. Builds on #39 and #41.
+=======
+### typosquat scanner — JSON-serializable `ScanResult`
+
+- **What:** `ScanResult` in `src/typosquat/scanner.rs` now derives
+  `serde::Serialize` and `serde::Deserialize` with snake_case keys, so the
+  CLI and future report formats can emit machine-readable output.
+  `distance_match` serializes as a `[name, distance]` array and an unset
+  signal as `null`.
+- **Tests:** one test asserts the exact JSON for `expresss`
+  (`{"candidate":"expresss","distance_match":["express",1],"homoglyph_match":null}`).
+  A round-trip test serializes and deserializes three results (distance
+  only, both signals, clean) through `serde_json` and checks each comes back
+  unchanged.
+- **By:** Austinaminu2
+- **Closes:** #38
+- **Status:** In review.
+>>>>>>> feat/38-scanresult-json
