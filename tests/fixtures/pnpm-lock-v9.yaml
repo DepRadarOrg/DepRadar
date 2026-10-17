@@ -1,0 +1,29 @@
+lockfileVersion: '9.0'
+
+importers:
+  .:
+    dependencies:
+      express:
+        specifier: ^4.18.0
+        version: 4.18.2
+
+packages:
+
+  '@babel/core@7.24.0':
+    resolution: {integrity: sha512-aaa}
+    engines: {node: '>=6.9.0'}
+
+  express@4.18.2:
+    resolution: {integrity: sha512-bbb}
+    engines: {node: '>= 0.10.0'}
+
+  react-dom@18.2.0:
+    resolution: {integrity: sha512-ccc}
+    peerDependencies:
+      react: ^18.2.0
+
+snapshots:
+
+  express@4.18.2: {}
+
+  react-dom@18.2.0(react@18.2.0): {}

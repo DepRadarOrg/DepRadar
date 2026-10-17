@@ -1,0 +1,24 @@
+lockfileVersion: '6.0'
+
+dependencies:
+  express:
+    specifier: ^4.18.0
+    version: 4.18.2
+
+packages:
+
+  /@babel/core@7.23.0:
+    resolution: {integrity: sha512-aaa}
+    engines: {node: '>=6.9.0'}
+    dev: true
+
+  /express@4.18.2:
+    resolution: {integrity: sha512-bbb}
+    engines: {node: '>= 0.10.0'}
+    dev: false
+
+  /react-dom@18.2.0(react@18.2.0):
+    resolution: {integrity: sha512-ccc}
+    peerDependencies:
+      react: ^18.2.0
+    dev: false

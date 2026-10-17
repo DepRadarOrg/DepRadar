@@ -384,3 +384,65 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** Maki
 - **Closes:** #37
 - **Status:** In review.
+
+### scanner — yarn.lock (v1) parser
+
+- **What:** Adds `parse_yarn_lock` in [`yarn.rs`](src/lockfile/yarn.rs) and
+  wires it into `parse_file` for `yarn.lock`. Reads each entry header
+  (`"name@^1.0.0", name@~1.1:`, including scoped names and several
+  specifiers per entry) and its `version "x.y.z"` field; each
+  `(name, version)` pair is returned once. `direct` and `dev` are `false`
+  because the format doesn't record them.
+- **Tests:** Unit tests over the new `tests/fixtures/yarn.lock` fixture
+  (scoped, multi-specifier and exact entries). Not run in this change.
+- **By:** soma-enyi
+- **Closes:** #62
+- **Status:** In review.
+
+### scanner — pnpm-lock.yaml parser (v6 and v9)
+
+- **What:** Adds `parse_pnpm_lock` in [`pnpm.rs`](src/lockfile/pnpm.rs),
+  wired into `parse_file` for `pnpm-lock.yaml`, and the `serde_yaml`
+  dependency (plus a `ParseError::Yaml` variant). Reads the `packages:`
+  section for both `/name@version` (v6) and `name@version` (v9) keys,
+  including scoped names; v6 peer-dependency suffixes such as
+  `(react@18.2.0)` are dropped. `dev` follows the v6 `dev:` field and is
+  `false` for v9, which doesn't record it; `direct` is always `false`.
+- **Tests:** Unit tests over new `pnpm-lock-v6.yaml` and
+  `pnpm-lock-v9.yaml` fixtures. Not run in this change; `Cargo.lock` is not
+  yet updated for `serde_yaml`.
+- **By:** soma-enyi
+- **Closes:** #63
+- **Status:** In review.
+
+### scanner — requirements.txt parser
+
+- **What:** Adds `parse_requirements` and
+  `parse_requirements_with_warnings` in [`pypi.rs`](src/lockfile/pypi.rs),
+  wired into `parse_file` for `requirements*.txt`. `name==version` (and
+  `===`) pins are recorded; other specifiers (`>=`, `~=`, `==1.*`) and bare
+  names get `version: None`. Comments, blank lines, `--hash` options
+  (including `\` continuations), extras and environment markers are
+  ignored. `-r other.txt` includes are not followed and come back as
+  warnings from `parse_requirements_with_warnings`; other option lines
+  (`-e`, `--index-url`, ...) are skipped silently. All entries are
+  `direct: true`.
+- **Tests:** Unit tests for each line type. Not run in this change.
+- **By:** soma-enyi
+- **Closes:** #64
+- **Status:** In review.
+
+### scanner — poetry.lock parser
+
+- **What:** Adds `parse_poetry_lock` in [`pypi.rs`](src/lockfile/pypi.rs),
+  wired into `parse_file` for `poetry.lock`. Reads every `[[package]]`
+  entry (`name`, `version`, `category`/`groups`) with the `toml` crate and
+  applies PEP 503 name normalization (lowercase, runs of `-`, `_`, `.`
+  collapsed to `-`). `dev` is `true` for `category = "dev"` or for a
+  `groups` list without `main`; `direct` is always `false`.
+- **Tests:** Unit tests over the new `tests/fixtures/poetry.lock` fixture
+  (old `category` and new `groups` styles, name normalization). Not run in
+  this change.
+- **By:** soma-enyi
+- **Closes:** #65
+- **Status:** In review.
