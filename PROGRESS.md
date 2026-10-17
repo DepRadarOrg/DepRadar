@@ -319,3 +319,21 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### OSV client — mock tests, retries, more ecosystems, disk cache
+
+- **What:** Extends `src/cve/osv_client.rs`.
+  - **`OsvClient`:** injectable base URL, 15s request timeout, up to 3
+    retries on 429/5xx with exponential backoff and jitter (other 4xx are
+    never retried). `query_osv` keeps working as a wrapper.
+  - **Ecosystems:** adds `Go`, `Maven`, `RubyGems` and `Packagist`.
+  - **Cache:** `src/cve/cache.rs` stores responses per
+    `(ecosystem, name, version)` as JSON under `<OS cache dir>/depradar/osv/`
+    with a 24h TTL. New `osv [--no-cache] <ecosystem> <name> <version>` CLI.
+  - **Tests:** mockito-based tests for success, `{}`, malformed JSON, 429,
+    500, 503-then-200, 400 not retried, an unreachable server, a cache hit
+    that makes no request, and an expired entry that refetches. Every
+    `OsvClientError` variant is covered; the cache tests use a temp dir.
+- **By:** had3sgames
+- **Closes:** #50, #51, #52, #53
+- **Status:** Open PR.
