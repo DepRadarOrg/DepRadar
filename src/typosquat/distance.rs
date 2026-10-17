@@ -131,4 +131,42 @@ mod tests {
         assert_eq!(name, "");
         assert_eq!(distance, usize::MAX);
     }
+
+    mod properties {
+        use super::*;
+        use proptest::prelude::*;
+
+        fn char_len(s: &str) -> usize {
+            s.chars().count()
+        }
+
+        proptest! {
+            #[test]
+            fn distance_is_symmetric(a in any::<String>(), b in any::<String>()) {
+                prop_assert_eq!(levenshtein_distance(&a, &b), levenshtein_distance(&b, &a));
+            }
+
+            #[test]
+            fn distance_to_self_is_zero(a in any::<String>()) {
+                prop_assert_eq!(levenshtein_distance(&a, &a), 0);
+            }
+
+            #[test]
+            fn distance_satisfies_triangle_inequality(
+                a in any::<String>(),
+                b in any::<String>(),
+                c in any::<String>(),
+            ) {
+                prop_assert!(
+                    levenshtein_distance(&a, &c)
+                        <= levenshtein_distance(&a, &b) + levenshtein_distance(&b, &c)
+                );
+            }
+
+            #[test]
+            fn distance_is_at_most_the_longer_length(a in any::<String>(), b in any::<String>()) {
+                prop_assert!(levenshtein_distance(&a, &b) <= char_len(&a).max(char_len(&b)));
+            }
+        }
+    }
 }

@@ -1,0 +1,28 @@
+[package]
+name = "deprader-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+deprader = { path = ".." }
+
+# Keep this crate out of the root workspace: it needs nightly and is built
+# only by `cargo fuzz`.
+[workspace]
+
+[[bin]]
+name = "normalize_homoglyphs"
+path = "fuzz_targets/normalize_homoglyphs.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "score_package"
+path = "fuzz_targets/score_package.rs"
+test = false
+doc = false

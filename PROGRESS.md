@@ -319,3 +319,24 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### Typosquat property tests, benchmarks and fuzzing; OSV batch queries
+
+- **What:**
+  - `query_osv_batch` in `src/cve/osv_client.rs`: `POST /v1/querybatch`,
+    chunked at 1000 queries per request, results in input order. Batch
+    responses carry only vuln IDs, so callers fetch details separately.
+    Tested against a local mock HTTP server, plus one live test that skips
+    without network.
+  - `proptest` properties for `levenshtein_distance` (symmetry, `d(a,a)=0`,
+    triangle inequality, `d(a,b) <= max(len)`) over arbitrary Unicode.
+  - Criterion benchmarks (`benches/typosquat.rs`) for `levenshtein_distance`,
+    `nearest_match` and `score_package` on clean, typo and homoglyph inputs;
+    CI runs `cargo bench --no-run`.
+  - `fuzz/` cargo-fuzz crate with `normalize_homoglyphs` and `score_package`
+    targets. Both ran for 10 minutes with no crashes (34.9M and 10.7K runs
+    respectively; `score_package` reloads the dataset on every call).
+  - How to run benchmarks and fuzzers is in `CONTRIBUTING.md`.
+- **By:** Coredevjay
+- **Closes:** #42, #43, #44, #45
+- **Status:** Open PR.

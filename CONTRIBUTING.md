@@ -37,6 +37,22 @@ Frontend conventions (contract access only through `lib/contract.ts`,
 loading/error/empty states everywhere, CSS tokens only) are in
 [frontend/README.md](frontend/README.md).
 
+### Benchmarks and fuzzing
+
+```bash
+# Criterion benchmarks for the typosquat signals (benches/typosquat.rs)
+cargo bench
+cargo bench --no-run   # compile only; this is what CI runs
+
+# Fuzz the typosquat scanner (needs nightly and `cargo install cargo-fuzz`)
+cd fuzz
+cargo +nightly fuzz run normalize_homoglyphs -- -max_total_time=600
+cargo +nightly fuzz run score_package -- -max_total_time=600
+```
+
+Any crash input that `cargo fuzz` saves under `fuzz/artifacts/` should be
+added as a regression test next to the code it broke.
+
 Some tests in `src/cve/` call the live [OSV API](https://osv.dev); they skip
 (rather than fail) when the network is unavailable.
 

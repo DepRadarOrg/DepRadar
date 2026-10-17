@@ -6,3 +6,6 @@ dist/
 .stellar/
 .soroban/
 **/identity/*.toml
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
