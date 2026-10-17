@@ -319,3 +319,22 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** N/A
 - **Status:** Merged.
+
+### OSV client — dedupe, configurable base URL, withdrawn filter, typed errors
+
+- **What:** Four additions to `src/cve/osv_client.rs`.
+  - **`dedupe_by_alias`:** merges records whose `id`/`aliases` overlap
+    (GHSA ↔ CVE) into one, keeping the GHSA record as primary.
+  - **`OsvClient`:** `new()` and `with_base_url(..)`, sending
+    `User-Agent: depradar/<version> (+repo URL)`. `query_osv` still works
+    and delegates to a default client.
+  - **Withdrawn records:** `OsvVulnerability.withdrawn` is parsed and
+    withdrawn records are dropped from `query_osv` results.
+  - **Typed errors:** `OsvClientError::RateLimited { retry_after }` (parses
+    `Retry-After`) and `OsvClientError::NotFound`.
+- **Tests:** mocked with a local TCP listener (no new dependencies) for the
+  User-Agent, withdrawn filtering, 429 with and without `Retry-After`, 404,
+  and alias dedupe.
+- **By:** ink-mami
+- **Closes:** #54, #55, #56, #57
+- **Status:** In review.
