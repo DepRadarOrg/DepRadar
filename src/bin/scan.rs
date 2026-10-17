@@ -1,8 +1,8 @@
-//! Manual CLI for the scanner.
+//! Deprecated: use the `depradar` binary instead.
 //!
-//! Usage: `scan <package-name>` — scores the given name against the bundled
-//! popular-package dataset with the edit-distance, homoglyph and digit-swap
-//! signals and prints the result.
+//! Usage: `scan <lockfile | package-name>`. This is the same as `depradar scan
+//! <lockfile>` or `depradar name <package-name>`. It prints a deprecation
+//! notice to stderr and otherwise behaves as before.
 
 use std::env;
 use std::path::Path;
@@ -13,6 +13,11 @@ use deprader::pipeline::{scan_lockfile, ScanOptions};
 use deprader::typosquat::scanner::score_package;
 
 fn main() -> ExitCode {
+    eprintln!(
+        "warning: `scan` is deprecated; use `depradar name <package>` or \
+         `depradar scan <path>` instead"
+    );
+
     let target = match env::args().nth(1) {
         Some(target) => target,
         None => {

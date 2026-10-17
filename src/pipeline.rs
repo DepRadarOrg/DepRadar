@@ -1,11 +1,14 @@
 //! End-to-end scan of a project lockfile: parse it, run the typosquat scorer
 //! over every package name, check every pinned version against OSV, drop
 //! anything accepted in a `.depradarignore` file ([`crate::ignore`]), and
-//! collect the results into one [`Report`].
+//! collect the results into one [`Report`]. [`scan_dir`] does the same for
+//! every lockfile in a directory tree, such as a monorepo.
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::cve::osv_client::{query_osv_batch, OsvBatchQuery};
@@ -268,6 +271,118 @@ pub fn scan_lockfile(
         suppressed,
         warnings,
         summary,
+    })
+}
+
+/// Directories [`scan_dir`] never descends into: installed dependencies,
+/// VCS metadata and build output, none of which hold the project's own
+/// lockfiles.
+pub const SKIPPED_DIRS: &[&str] = &["node_modules", ".git", "target", "dist"];
+
+/// A lockfile [`scan_dir`] found but couldn't scan.
+#[derive(Debug)]
+pub struct DirScanError {
+    /// Relative to the scanned root.
+    pub path: PathBuf,
+    pub error: ScanError,
+}
+
+/// The outcome of scanning a directory tree: one [`Report`] per lockfile.
+#[derive(Debug)]
+pub struct DirReport {
+    pub root: PathBuf,
+    /// One report per scanned lockfile, sorted by path. Each report's `path`
+    /// is relative to `root`.
+    pub lockfiles: Vec<Report>,
+    /// Lockfiles that were found but couldn't be parsed or checked. One bad
+    /// lockfile doesn't stop the rest of the tree from being scanned.
+    pub errors: Vec<DirScanError>,
+}
+
+impl DirReport {
+    /// True if any lockfile has an unsuppressed finding.
+    pub fn has_findings(&self) -> bool {
+        self.lockfiles.iter().any(Report::has_findings)
+    }
+}
+
+impl fmt::Display for DirReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Scanned {} ({} lockfile(s))",
+            self.root.display(),
+            self.lockfiles.len()
+        )?;
+        for report in &self.lockfiles {
+            write!(f, "\n\n== {} ==\n{report}", report.path.display())?;
+        }
+        if !self.errors.is_empty() {
+            write!(f, "\n\nErrors ({}):", self.errors.len())?;
+            for err in &self.errors {
+                write!(f, "\n  - {}: {}", err.path.display(), err.error)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Walks the tree under `root` and runs [`scan_lockfile`] on every lockfile
+/// in it, grouping the results by lockfile path.
+///
+/// Directories named in [`SKIPPED_DIRS`] and symlinks are not followed. A
+/// file counts as a lockfile when [`scan_lockfile`] recognises its name, so
+/// this supports exactly the formats a single-file scan does. Fails only if
+/// `root` itself can't be read.
+pub fn scan_dir(root: impl AsRef<Path>, opts: &ScanOptions<'_>) -> io::Result<DirReport> {
+    let root = root.as_ref();
+    let mut lockfiles = Vec::new();
+    let mut errors = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+
+    while let Some(dir) = pending.pop() {
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(err) if dir == root => return Err(err),
+            // A subdirectory we can't list is skipped, not fatal.
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if file_type.is_dir() {
+                if !SKIPPED_DIRS.iter().any(|skip| entry.file_name() == *skip) {
+                    pending.push(path);
+                }
+                continue;
+            }
+            if !file_type.is_file() {
+                continue;
+            }
+
+            let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
+            match scan_lockfile(&path, opts) {
+                Ok(mut report) => {
+                    report.path = relative;
+                    lockfiles.push(report);
+                }
+                Err(ScanError::Lockfile(LockfileError::UnknownFormat(_))) => {}
+                Err(error) => errors.push(DirScanError {
+                    path: relative,
+                    error,
+                }),
+            }
+        }
+    }
+
+    lockfiles.sort_by(|a, b| a.path.cmp(&b.path));
+    errors.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(DirReport {
+        root: root.to_path_buf(),
+        lockfiles,
+        errors,
     })
 }
 
