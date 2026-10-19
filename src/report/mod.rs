@@ -97,6 +97,7 @@ pub fn severity_of(finding: &Finding, advisories: &AdvisorySeverities) -> Severi
         FindingKind::Vulnerability { advisory_id } => {
             advisories.get(advisory_id).unwrap_or(UNRATED_ADVISORY)
         }
+        FindingKind::InstallScript { .. } => Severity::High,
     }
 }
 

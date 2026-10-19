@@ -145,6 +145,7 @@ impl IgnoreEntry {
                 advisory.eq_ignore_ascii_case(advisory_id)
             }
             (Some(_), FindingKind::Typosquat { .. }) => false,
+            (Some(_), FindingKind::InstallScript { .. }) => false,
         }
     }
 }

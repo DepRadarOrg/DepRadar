@@ -10,6 +10,7 @@
 //! anything accepted in a `.depradarignore` file ([`ignore`]). [`report`]
 //! rates each finding's severity and renders the result, e.g. as SARIF.
 
+pub mod behavioral;
 pub mod cve;
 pub mod ignore;
 pub mod lockfile;

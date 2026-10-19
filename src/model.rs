@@ -43,6 +43,12 @@ pub enum FindingKind {
     },
     /// OSV reports a known vulnerability affecting this exact version.
     Vulnerability { advisory_id: String },
+    /// Package contains an install-time script that executes during installation.
+    /// These scripts are a common malware delivery path.
+    InstallScript {
+        script_name: String,
+        script_command: String,
+    },
 }
 
 /// A single problem with a single dependency.
@@ -90,6 +96,12 @@ impl fmt::Display for Finding {
             }
             FindingKind::Vulnerability { advisory_id } => {
                 write!(f, ": known vulnerability {advisory_id}")
+            }
+            FindingKind::InstallScript {
+                script_name,
+                script_command,
+            } => {
+                write!(f, ": install-time script '{script_name}': {script_command}")
             }
         }
     }

@@ -71,7 +71,7 @@ fn one_rule_per_finding_kind_and_one_result_per_finding() {
         .iter()
         .map(|rule| rule["id"].as_str().unwrap())
         .collect();
-    assert_eq!(rules, ["typosquat", "vulnerability"]);
+    assert_eq!(rules, ["typosquat", "vulnerability", "install-script"]);
 
     let results = run["results"].as_array().unwrap();
     assert_eq!(results.len(), 2, "results: {results:#?}");
