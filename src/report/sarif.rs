@@ -31,7 +31,7 @@ struct Rule {
     default_severity: Severity,
 }
 
-const RULES: [Rule; 2] = [
+const RULES: [Rule; 3] = [
     Rule {
         id: "typosquat",
         name: "Typosquat",
@@ -49,12 +49,22 @@ const RULES: [Rule; 2] = [
                pinned in the lockfile.",
         default_severity: Severity::High,
     },
+    Rule {
+        id: "install-script",
+        name: "InstallScript",
+        short: "Package contains install-time script",
+        full: "Package contains a preinstall, install, postinstall, or prepare script \
+               that executes arbitrary code during installation. These scripts are a \
+               common malware delivery vector.",
+        default_severity: Severity::High,
+    },
 ];
 
 fn rule_index(kind: &FindingKind) -> usize {
     match kind {
         FindingKind::Typosquat { .. } => 0,
         FindingKind::Vulnerability { .. } => 1,
+        FindingKind::InstallScript { .. } => 2,
     }
 }
 
@@ -137,6 +147,7 @@ fn result(
     let advisory = match &finding.kind {
         FindingKind::Vulnerability { advisory_id } => advisory_id.as_str(),
         FindingKind::Typosquat { .. } => "",
+        FindingKind::InstallScript { script_name, .. } => script_name.as_str(),
     };
     let fingerprint = format!(
         "{}:{}:{}@{}:{advisory}",
