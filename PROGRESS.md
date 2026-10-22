@@ -635,44 +635,37 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
 
-### registry — yanked / deprecated version detection — #178
+### deprader_router — reviewer role, structured bounty metadata, balance invariant tests
 
-- **What:** Adds yanked/deprecated detection to `src/registry/`. For npm,
-  the version metadata's `deprecated` field is read; for crates.io, the
-  version's `yanked` flag is read. A pinned version that is yanked or
-  deprecated produces an informational finding carrying the deprecation
-  message (or a yanked notice) so it surfaces in reports even when no CVE
-  matches.
-- **Tests:** Fixture tests for both registries — an npm version with a
-  `deprecated` message, a crates.io version with `yanked: true`, and
-  non-flagged versions that must produce no finding.
-- **By:** TBD
-- **Closes:** #178
-- **Status:** In review.
-
-### scanner — license policy check — #179
-
-- **What:** Adds `src/license.rs`, which fetches license metadata from each
-  registry (npm `license`, PyPI `info.license` and `classifiers`, crates.io
-  `license`) for the dependencies in a lockfile and flags any license not
-  in a configurable allowlist as a low-severity finding. The allowlist is
-  configurable so teams can match their own policy.
-- **Tests:** Unit tests with mocked registry responses covering allowed
-  licenses, disallowed licenses, and packages with missing or ambiguous
-  license metadata.
-- **By:** TBD
-- **Closes:** #179
-- **Status:** In review.
-
-### frontend — About page with contract admin and configuration — #181
-
-- **What:** Adds `/about` to `frontend/`, showing the current admin
-  (`get_admin`), the pending admin if one has been proposed, the contract
-  ID, the network, and the claim and refund rules in plain language. The
-  contract reads live in `frontend/src/lib/contract.ts`; the page is linked
-  from the top bar.
-- **Tests:** Component test rendering the About page with a mocked admin
-  (and pending admin) from a stubbed contract client.
-- **By:** TBD
-- **Closes:** #181
+- **What:** Three contract changes in `contracts/deprader_router`:
+  - **Reviewer role (#116).** The admin can now delegate review with
+    `add_reviewer(reviewer)` / `remove_reviewer(reviewer)` (admin-only,
+    each emits a `reviewer_added` / `reviewer_removed` event, and
+    `is_reviewer(address)` reads the set). `reject_claim` and `release`
+    accept the stored admin *or* a registered reviewer, each authenticating
+    itself; the admin key is no longer needed to review claims. Config,
+    pause, upgrade and reviewer management stay admin-only.
+  - **Structured finding metadata (#117).** `Bounty` gains optional
+    `ecosystem: Option<Symbol>`, `package: Option<String>` and
+    `severity: Option<u32>` fields, set through new `create_bounty`
+    arguments. Lengths are validated (ecosystem symbol and package name
+    bounded, severity range-checked) and `issue_ref` is kept as free text.
+    `frontend/src/lib/types.ts` and `parseBounty` in
+    `frontend/src/lib/contract.ts` were updated in the same change to read
+    the new fields.
+  - **Balance invariant tests (#118).** A seeded, randomized test runs a few
+    hundred sequences of create / claim / reject / release / cancel and
+    asserts after every step that the contract's token balance equals the
+    sum of `amount` over `Open` bounties. The seed is printed on failure and
+    the test runs well under 10s.
+- **Tests:** Contract tests extended with the full permission matrix
+  (admin, reviewer, stranger × each entry point), metadata validation cases
+  (missing, empty, over-long and out-of-range values), and the randomized
+  invariant test. Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the `wasm32v1-none` release build of the
+  contract all pass; in `frontend/`, `npm run lint`, `typecheck`, `test`
+  and `build` pass.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #116, #117, #118
 - **Status:** In review.
