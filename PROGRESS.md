@@ -620,3 +620,55 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** coderolisa
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
+
+### Fixture — deliberately vulnerable demo project — #174
+
+- **What:** Adds `examples/vulnerable-app/`, a sample npm project for demos
+  and tutorials with known, documented problems: a `package.json` +
+  `package-lock.json` pinning `lodash@4.17.4` (affected by
+  GHSA-29mw-wpgm-hmr9 / CVE-2020-28500 and GHSA-35jh-r3h4-6jhm /
+  CVE-2021-23337), and a dependency on a typosquat-looking name that does
+  not exist on npm (no real malicious package is referenced). Its
+  [`README.md`](examples/vulnerable-app/README.md) lists the findings
+  DepRadar is expected to report for it.
+- **Verified:** the README's commands and links were checked against the
+  fixture as committed.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #174
+- **Status:** In review.
+
+### CONTRIBUTING — review process and picking an issue — #175
+
+- **What:** Expands [`CONTRIBUTING.md`](CONTRIBUTING.md) with a "Review
+  process" section (expected response time, the checklist reviewers use,
+  and the common reasons a PR is sent back — missing tests, a missing
+  `PROGRESS.md` entry, unrelated changes) and a short "Picking an issue"
+  section explaining the Stellar Wave labels.
+- **Verified:** all commands and links in the new sections were checked.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #175
+- **Status:** In review.
+
+### typosquat — explain *why* with the exact edit operations — #176
+
+- **What:** Adds an edit-script computation to
+  [`distance.rs`](src/typosquat/distance.rs) that returns the
+  insert/delete/substitute operations (with positions) turning the candidate
+  into its nearest match, and renders it in `ScanResult`'s `Display` output,
+  e.g. `` `expresss` = `express` + inserted `s` at 7 ``.
+- **Tests:** insert, delete, substitute and transposition cases.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #176
+- **Status:** In review.
+
+### typosquat — weight matches by target popularity — #177
+
+- **What:** Keeps each dataset file's rank order and exposes
+  `rank(name) -> Option<usize>` in
+  [`dataset.rs`](src/typosquat/dataset.rs). `ScanResult` in
+  [`scanner.rs`](src/typosquat/scanner.rs) now carries the matched package's
+  rank, and it is included in the JSON output.
+- **Tests:** asserts `react` has a lower rank than a tail entry.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #177
+- **Status:** In review.

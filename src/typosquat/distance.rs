@@ -5,6 +5,45 @@
 //! that gap, [`nearest_match`] finds the closest legitimate name in a
 //! reference set, and [`nearest_matches`] returns the closest `n`. No scoring or thresholding lives here — callers decide what
 //! counts as "suspiciously close".
+//!
+//! [`edit_script`] goes one step further and explains *how* two names differ:
+//! it returns the concrete sequence of [`EditOp`]s (insert, delete, substitute,
+//! or transposition, each with a position) that turns one name into the other.
+//! This lets a reviewer see `expresss` = `express` + inserted `s` at 7 rather
+//! than just "edit distance 1".
+
+/// A single edit operation turning one string into another.
+///
+/// Positions are zero-based character (Unicode scalar value) indices. For
+/// [`EditOp::Insert`] the position is the index in the *target* string where
+/// the character was inserted; for [`EditOp::Delete`] it is the index in the
+/// *source* string of the removed character; for [`EditOp::Substitute`] it is
+/// the index in both strings where one character replaced another; and for
+/// [`EditOp::Transpose`] it is the index of the first of the two swapped
+/// characters in the source string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditOp {
+    /// A character was inserted at `pos` in the target.
+    Insert { pos: usize, ch: char },
+    /// The character `ch` at `pos` in the source was deleted.
+    Delete { pos: usize, ch: char },
+    /// The character at `pos` was replaced by `to`.
+    Substitute { pos: usize, from: char, to: char },
+    /// Two adjacent characters at `pos` and `pos + 1` were swapped.
+    Transpose { pos: usize, first: char, second: char },
+}
+
+impl EditOp {
+    /// The position associated with this operation.
+    pub fn pos(&self) -> usize {
+        match *self {
+            EditOp::Insert { pos, .. }
+            | EditOp::Delete { pos, .. }
+            | EditOp::Substitute { pos, .. }
+            | EditOp::Transpose { pos, .. } => pos,
+        }
+    }
+}
 
 /// Standard Levenshtein edit distance between `a` and `b`: the minimum number
 /// of single-character insertions, deletions, or substitutions that turns one
@@ -42,6 +81,110 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
     }
 
     prev[b.len()]
+}
+
+/// Computes the edit script that turns `from` into `to`, using the same
+/// Levenshtein model as [`levenshtein_distance`] (insertions, deletions and
+/// substitutions), plus a transposition shortcut: when swapping two adjacent
+/// characters is cheaper than the plain Levenshtein path, a single
+/// [`EditOp::Transpose`] is emitted instead of a delete + insert pair.
+///
+/// The returned operations are ordered by position. The number of operations
+/// equals the distance reported by [`edit_distance_with_transpositions`], which
+/// may be smaller than [`levenshtein_distance`] when a transposition applies.
+///
+/// Positions are zero-based character indices; see [`EditOp`] for the exact
+/// meaning per variant.
+pub fn edit_script(from: &str, to: &str) -> Vec<EditOp> {
+    let a: Vec<char> = from.chars().collect();
+    let b: Vec<char> = to.chars().collect();
+    let n = a.len();
+    let m = b.len();
+
+    // `dp[i][j]` is the edit distance (with transpositions) between the first
+    // `i` chars of `a` and the first `j` chars of `b`.
+    let mut dp = vec![vec![0usize; m + 1]; n + 1];
+    for (i, row) in dp.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for j in 0..=m {
+        dp[0][j] = j;
+    }
+
+    for i in 1..=n {
+        for j in 1..=m {
+            let substitution_cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
+            let mut best = (dp[i - 1][j] + 1) // delete a[i-1]
+                .min(dp[i][j - 1] + 1) // insert b[j-1]
+                .min(dp[i - 1][j - 1] + substitution_cost); // substitute / match
+            if i >= 2 && j >= 2 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                best = best.min(dp[i - 2][j - 2] + 1); // transpose
+            }
+            dp[i][j] = best;
+        }
+    }
+
+    // Walk back through the table, collecting operations in reverse.
+    let mut ops: Vec<EditOp> = Vec::new();
+    let (mut i, mut j) = (n, m);
+    while i > 0 || j > 0 {
+        if i > 0
+            && j > 0
+            && a[i - 1] == b[j - 1]
+            && dp[i][j] == dp[i - 1][j - 1]
+        {
+            // Match: no operation.
+            i -= 1;
+            j -= 1;
+        } else if i >= 2
+            && j >= 2
+            && a[i - 1] == b[j - 2]
+            && a[i - 2] == b[j - 1]
+            && dp[i][j] == dp[i - 2][j - 2] + 1
+        {
+            ops.push(EditOp::Transpose {
+                pos: i - 2,
+                first: a[i - 2],
+                second: a[i - 1],
+            });
+            i -= 2;
+            j -= 2;
+        } else if i > 0 && j > 0 && dp[i][j] == dp[i - 1][j - 1] + 1 {
+            ops.push(EditOp::Substitute {
+                pos: i - 1,
+                from: a[i - 1],
+                to: b[j - 1],
+            });
+            i -= 1;
+            j -= 1;
+        } else if i > 0 && dp[i][j] == dp[i - 1][j] + 1 {
+            ops.push(EditOp::Delete {
+                pos: i - 1,
+                ch: a[i - 1],
+            });
+            i -= 1;
+        } else {
+            // Must be an insertion of b[j-1].
+            ops.push(EditOp::Insert {
+                pos: j - 1,
+                ch: b[j - 1],
+            });
+            j -= 1;
+        }
+    }
+
+    ops.reverse();
+    ops
+}
+
+/// Edit distance between `a` and `b` allowing insertions, deletions,
+/// substitutions and adjacent transpositions (the Damerau–Levenshtein
+/// "optimal string alignment" variant).
+///
+/// This is never larger than [`levenshtein_distance`] and is the distance
+/// reported alongside [`edit_script`].
+pub fn edit_distance_with_transpositions(a: &str, b: &str) -> usize {
+    edit_script(a, b).len()
 }
 
 /// Returns up to `n` names from `dataset` closest to `candidate`, each with
@@ -132,6 +275,107 @@ mod tests {
     }
 
     #[test]
+    fn edit_script_reports_insertion() {
+        // `expresss` = `express` + inserted `s` at position 7.
+        let ops = edit_script("express", "expresss");
+        assert_eq!(
+            ops,
+            vec![EditOp::Insert {
+                pos: 7,
+                ch: 's'
+            }]
+        );
+        assert_eq!(edit_distance_with_transpositions("express", "expresss"), 1);
+    }
+
+    #[test]
+    fn edit_script_reports_deletion() {
+        // `expres` = `express` with the `s` at position 6 deleted.
+        let ops = edit_script("express", "expres");
+        assert_eq!(
+            ops,
+            vec![EditOp::Delete {
+                pos: 6,
+                ch: 's'
+            }]
+        );
+        assert_eq!(edit_distance_with_transpositions("express", "expres"), 1);
+    }
+
+    #[test]
+    fn edit_script_reports_substitution() {
+        // `requezts` vs `requests`: `z` at position 5 replaces `s`.
+        let ops = edit_script("requests", "requezts");
+        assert_eq!(
+            ops,
+            vec![EditOp::Substitute {
+                pos: 5,
+                from: 's',
+                to: 'z'
+            }]
+        );
+        assert_eq!(
+            edit_distance_with_transpositions("requests", "requezts"),
+            1
+        );
+    }
+
+    #[test]
+    fn edit_script_reports_transposition() {
+        // `recat` vs `react`: `c` and `a` swapped at positions 2 and 3.
+        let ops = edit_script("react", "recat");
+        assert_eq!(
+            ops,
+            vec![EditOp::Transpose {
+                pos: 2,
+                first: 'a',
+                second: 'c'
+            }]
+        );
+        // Transposition is a single edit, unlike plain Levenshtein (2).
+        assert_eq!(edit_distance_with_transpositions("react", "recat"), 1);
+        assert_eq!(levenshtein_distance("react", "recat"), 2);
+    }
+
+    #[test]
+    fn edit_script_of_identical_strings_is_empty() {
+        assert!(edit_script("express", "express").is_empty());
+        assert!(edit_script("", "").is_empty());
+    }
+
+    #[test]
+    fn edit_script_handles_empty_operands() {
+        assert_eq!(
+            edit_script("", "ab"),
+            vec![
+                EditOp::Insert { pos: 0, ch: 'a' },
+                EditOp::Insert { pos: 1, ch: 'b' },
+            ]
+        );
+        assert_eq!(
+            edit_script("ab", ""),
+            vec![
+                EditOp::Delete { pos: 0, ch: 'a' },
+                EditOp::Delete { pos: 1, ch: 'b' },
+            ]
+        );
+    }
+
+    #[test]
+    fn edit_script_length_matches_distance() {
+        for (a, b) in [
+            ("express", "expresss"),
+            ("express", "expres"),
+            ("requests", "requezts"),
+            ("react", "recat"),
+            ("", "react"),
+            ("react", ""),
+        ] {
+            assert_eq!(edit_script(a, b).len(), edit_distance_with_transpositions(a, b));
+        }
+    }
+
+    #[test]
     fn nearest_match_returns_exact_entry_with_distance_zero() {
         let dataset = load_popular_packages();
         let (name, distance) = nearest_match("react", &dataset);
@@ -180,6 +424,24 @@ mod tests {
             #[test]
             fn distance_is_at_most_the_longer_length(a in any::<String>(), b in any::<String>()) {
                 prop_assert!(levenshtein_distance(&a, &b) <= char_len(&a).max(char_len(&b)));
+            }
+
+            #[test]
+            fn edit_script_length_matches_its_distance(a in any::<String>(), b in any::<String>()) {
+                prop_assert_eq!(
+                    edit_script(&a, &b).len(),
+                    edit_distance_with_transpositions(&a, &b)
+                );
+            }
+
+            #[test]
+            fn transposition_distance_is_at_most_levenshtein(
+                a in any::<String>(),
+                b in any::<String>(),
+            ) {
+                prop_assert!(
+                    edit_distance_with_transpositions(&a, &b) <= levenshtein_distance(&a, &b)
+                );
             }
         }
     }
