@@ -10,6 +10,60 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Dependency licenses and sources — `cargo deny` — #163
+
+- **What:** Adds [`deny.toml`](deny.toml) allowing MIT, Apache-2.0, BSD,
+  ISC and Unicode licenses (with narrow per-crate exceptions for
+  `option-ext` (MPL-2.0) and `webpki-roots` (CDLA-Permissive-2.0)), denying
+  wildcard versions, unknown registries and unknown git sources, and
+  reporting duplicate versions. A `cargo deny` job in the Dependency Audit
+  workflow runs `cargo deny check licenses bans sources`.
+- **Verified:** `cargo deny check licenses bans sources` passes locally
+  (`bans ok, licenses ok, sources ok`).
+- **By:** CodePrincess360
+- **Closes:** #163
+- **Status:** In review.
+
+### Scanner detection on the bounty page — #166
+
+- **What:** New [`crates/typosquat-wasm`](crates/typosquat-wasm) compiles
+  the typosquat scorer to WebAssembly with `wasm-bindgen`, mounting
+  `src/typosquat` directly so the root crate's network dependencies stay
+  out of the wasm build. Its `scan(name)` returns the confidence and the
+  signals that fire. The bounty page parses the package from `issue_ref`
+  (or uses the structured `package` field) and shows those signals; the
+  module is built with `npm run build:wasm` and the panel degrades
+  gracefully when it isn't present. CI builds the crate for
+  `wasm32-unknown-unknown`.
+- **Tests:** Rust integration tests for the detection mapping and JSON
+  output; a `ScannerDetection` component test with the wasm module mocked;
+  unit tests for the `issue_ref` package parser.
+- **By:** CodePrincess360
+- **Closes:** #166
+- **Status:** In review.
+
+### Error boundary and friendly RPC errors — #167
+
+- **What:** A top-level React `ErrorBoundary` replaces a blank page with a
+  message and a Reload button when rendering fails. `ErrorState` now maps
+  common RPC failures — network down, rate limited, contract not found —
+  to plain-language messages via `lib/errors.ts`, falling back to the raw
+  message for anything else.
+- **Tests:** Boundary render/reload tests and a test per mapped error.
+- **By:** CodePrincess360
+- **Closes:** #167
+- **Status:** In review.
+
+### Open Graph and social preview tags — #169
+
+- **What:** `frontend/index.html` gains `og:*` and Twitter
+  `summary_large_image` card tags with a 1200×630 `og-image.png` derived
+  from `assets/banner.svg`. `VITE_SITE_URL` makes the image URL absolute
+  for link-preview crawlers.
+- **By:** CodePrincess360
+- **Closes:** #169
+- **Status:** In review.
+
 ### CLI — `depradar explain <advisory-id>` — #180
 
 - **What:** Adds `depradar explain <advisory-id>` to
