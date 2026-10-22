@@ -620,3 +620,58 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** coderolisa
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
+
+### Deployment script and DEPLOYMENT.md — #119
+
+- **What:** Adds `scripts/deploy.sh`, which builds the contract wasm
+  (`stellar contract build`), deploys it to the configured network, runs
+  `initialize --admin <identity>`, and prints the resulting contract ID.
+  Adds `DEPLOYMENT.md` covering creating and funding an identity, running
+  the script, verifying the deployment with the `client/` read client, and
+  updating the contract ID in `README.md`, `client/` and `frontend/`.
+- **Verified:** A fresh testnet deploy was run end to end with the script;
+  the run and the resulting contract ID are linked in the PR. Every command
+  and link in `DEPLOYMENT.md` was executed and checked.
+- **By:** TBD
+- **Closes:** #119
+- **Status:** In review.
+
+### deprader_router — reject self-claims by the bounty creator — #171
+
+- **What:** `submit_claim` now returns the new `CreatorCannotClaim` error
+  when `claimant == bounty.creator`, so a creator can no longer submit a
+  claim on their own bounty.
+- **Tests:** A new contract test asserts the error is returned for a
+  self-claim; existing tests are unchanged. Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the wasm build all pass.
+- **By:** TBD
+- **Closes:** #171
+- **Status:** In review.
+
+### deprader_router — minimum bounty amount per token — #172
+
+- **What:** Adds an admin-set `min_amount` per allowed token (default 0,
+  with a setter and getter). `create_bounty` rejects amounts below the
+  token's minimum with the new `AmountTooSmall` error.
+- **Tests:** Contract tests cover amounts below, at and above the minimum,
+  plus the default of 0. Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the wasm build all pass.
+- **By:** TBD
+- **Closes:** #172
+- **Status:** In review.
+
+### deprader_router — `get_config` getter — #173
+
+- **What:** Adds `get_config() -> Config`, returning the contract's
+  `REVIEW_WINDOW_SECS`, `MAX_CLAIMS_PER_BOUNTY`, `MAX_REF_LEN` and
+  `MAX_BOUNTY_DURATION_SECS` as a struct, so front ends stop hard-coding
+  them.
+- **Tests:** A contract test asserts the getter matches the constants.
+  Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the wasm build all pass.
+- **By:** TBD
+- **Closes:** #173
+- **Status:** In review.

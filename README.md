@@ -209,6 +209,12 @@ on Stellar testnet:
 
 **Contract ID:** [`CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ`](https://stellar.expert/explorer/testnet/contract/CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ)
 
+To deploy the contract yourself — build the wasm, deploy it, run
+`initialize --admin`, and print the new contract ID — run
+`scripts/deploy.sh`. The full procedure (identities, verifying the deploy
+with the read client, and updating the contract ID in this README,
+`client/` and `frontend/`) is documented in [DEPLOYMENT.md](DEPLOYMENT.md).
+
 A one-time `initialize(admin)` call at deploy time sets the admin who
 reviews claims. Bounty IDs are assigned by the contract, and every state
 change emits an event (`created`, `claimed`, `rejected`, `released`,
@@ -284,6 +290,7 @@ verified, with the full trail auditable by anyone.
 | OSV API client — `query_osv(package, ecosystem, version)` against [osv.dev](https://osv.dev) (`src/cve/osv_client.rs`) | [#10](https://github.com/DepRadarOrg/DepRadar/pull/10) |
 | Combined typosquat scoring API — `score_package()` merges Levenshtein + homoglyph signals; `cargo run --bin scan` CLI (`src/typosquat/scanner.rs`) | [#11](https://github.com/DepRadarOrg/DepRadar/pull/11) |
 | Project config file — `depradar.toml` with `fail_on`, `format`, `exclude`, `ecosystems`; CLI flags override file values (`src/config.rs`) | [#85](https://github.com/DepRadarOrg/DepRadar/issues/85) |
+| Deployment script (`scripts/deploy.sh`) and [DEPLOYMENT.md](DEPLOYMENT.md) — build, deploy, `initialize --admin`, print contract ID | [#119](https://github.com/DepRadarOrg/DepRadar/issues/119) |
 
 ### Open
 

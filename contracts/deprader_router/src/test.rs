@@ -1,6 +1,6 @@
 use super::{
-    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error,
-    MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, REVIEW_WINDOW_SECS,
+    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error, MAX_BOUNTY_DURATION_SECS,
+    MAX_CLAIMS_PER_BOUNTY, MAX_REF_LEN, REVIEW_WINDOW_SECS,
 };
 use soroban_sdk::{
     symbol_short,
@@ -270,6 +270,28 @@ fn test_submit_claim_rejects_duplicates_and_bad_input() {
         Err(Ok(Error::BountyNotFound))
     );
     assert!(t.client.get_claim(&999, &0).is_none());
+}
+
+#[test]
+fn test_creator_cannot_claim_own_bounty() {
+    let t = setup();
+    let bounty_id = t.create();
+
+    assert_eq!(
+        t.client
+            .try_submit_claim(&bounty_id, &t.creator, &t.s("org/repo#123-pr-456")),
+        Err(Ok(Error::CreatorCannotClaim))
+    );
+
+    // Nothing was recorded and no claim ID was consumed.
+    let bounty = t.client.get_bounty(&bounty_id).unwrap();
+    assert_eq!((bounty.claim_count, bounty.pending_claims), (0, 0));
+    assert!(t.client.get_claim(&bounty_id, &0).is_none());
+    assert_eq!(t.client.get_claim_id(&bounty_id, &t.creator), None);
+
+    // Other claimants are unaffected.
+    let (_, claim_id) = t.claim(bounty_id);
+    assert_eq!(claim_id, 0);
 }
 
 #[test]
@@ -884,4 +906,94 @@ fn test_non_admin_cannot_change_allowlist() {
     t.env.set_auths(&[]);
     assert!(t.client.try_allow_token(&t.token.address).is_err());
     assert!(t.client.try_disallow_token(&t.token.address).is_err());
+}
+
+// ------------------------------------------------------- min bounty amount
+
+#[test]
+fn test_min_amount_defaults_to_zero() {
+    let t = setup();
+    assert_eq!(t.client.get_min_amount(&t.token.address), 0);
+
+    // Any positive amount is accepted while the minimum is 0.
+    let bounty_id = t.client.create_bounty(
+        &t.creator,
+        &t.s("org/repo#1"),
+        &1,
+        &t.token.address,
+        &DEADLINE,
+    );
+    assert_eq!(bounty_id, 1);
+}
+
+#[test]
+fn test_set_min_amount_requires_admin() {
+    let t = setup();
+    t.client.set_min_amount(&t.token.address, &100);
+    assert_eq!(t.last_auth(), t.admin);
+    assert_eq!(t.client.get_min_amount(&t.token.address), 100);
+
+    t.env.set_auths(&[]);
+    assert!(t.client.try_set_min_amount(&t.token.address, &200).is_err());
+    assert_eq!(t.client.get_min_amount(&t.token.address), 100);
+}
+
+#[test]
+fn test_create_bounty_enforces_min_amount() {
+    let t = setup();
+    t.client.set_min_amount(&t.token.address, &100);
+
+    let create = |amount: i128| {
+        t.client.try_create_bounty(
+            &t.creator,
+            &t.s("org/repo#1"),
+            &amount,
+            &t.token.address,
+            &DEADLINE,
+        )
+    };
+
+    // Below the minimum.
+    assert_eq!(create(99), Err(Ok(Error::AmountTooSmall)));
+    // At the minimum.
+    assert_eq!(create(100), Ok(Ok(1)));
+    // Above the minimum.
+    assert_eq!(create(101), Ok(Ok(2)));
+
+    assert_eq!(t.client.bounty_count(), 2);
+    assert_eq!(t.token.balance(&t.client.address), 100 + 101);
+}
+
+#[test]
+fn test_min_amount_is_per_token() {
+    let t = setup();
+    let other_sac = t
+        .env
+        .register_stellar_asset_contract_v2(Address::generate(&t.env));
+    let other = other_sac.address();
+    t.client.allow_token(&other);
+    t.client.set_min_amount(&t.token.address, &100);
+
+    assert_eq!(t.client.get_min_amount(&other), 0);
+    let bounty_id = t.client.create_bounty(
+        &t.creator,
+        &t.s("org/repo#1"),
+        &1,
+        &other,
+        &DEADLINE,
+    );
+    assert_eq!(bounty_id, 1);
+}
+
+// ---------------------------------------------------------------- get_config
+
+#[test]
+fn test_get_config_matches_constants() {
+    let t = setup();
+    let config = t.client.get_config();
+
+    assert_eq!(config.review_window_secs, REVIEW_WINDOW_SECS);
+    assert_eq!(config.max_claims_per_bounty, MAX_CLAIMS_PER_BOUNTY);
+    assert_eq!(config.max_ref_len, MAX_REF_LEN);
+    assert_eq!(config.max_bounty_duration_secs, MAX_BOUNTY_DURATION_SECS);
 }
