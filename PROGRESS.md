@@ -635,57 +635,50 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
 
-### Deployment script and DEPLOYMENT.md — #119
+### Web dashboard — empty-state call to action for researchers — #182
 
-- **What:** Adds `scripts/deploy.sh`, which builds the contract wasm
-  (`stellar contract build`), deploys it to the configured network, runs
-  `initialize --admin <identity>`, and prints the resulting contract ID.
-  Adds `DEPLOYMENT.md` covering creating and funding an identity, running
-  the script, verifying the deployment with the `client/` read client, and
-  updating the contract ID in `README.md`, `client/` and `frontend/`.
-- **Verified:** A fresh testnet deploy was run end to end with the script;
-  the run and the resulting contract ID are linked in the PR. Every command
-  and link in `DEPLOYMENT.md` was executed and checked.
-- **By:** TBD
-- **Closes:** #119
+- **What:** `frontend/src/pages/BountyList.tsx` no longer stops at "No
+  bounties" when nothing is open. The empty state now explains how bounties
+  work (find a vulnerability, open an issue, get paid on release) and links
+  to the tutorial, `CONTRIBUTING.md` and the repo's GitHub issues so a
+  researcher has a next step.
+- **Verified:** `npm run lint`, `npm run typecheck`, `npm run test` and
+  `npm run build` pass in `frontend/`; a screenshot of the empty state is in
+  the PR.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #182
 - **Status:** In review.
 
-### deprader_router — reject self-claims by the bounty creator — #171
+### Read client — `--contract` / `--rpc` flags and env fallbacks — #183
 
-- **What:** `submit_claim` now returns the new `CreatorCannotClaim` error
-  when `claimant == bounty.creator`, so a creator can no longer submit a
-  claim on their own bounty.
-- **Tests:** A new contract test asserts the error is returned for a
-  self-claim; existing tests are unchanged. Snapshots regenerated.
-- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
-  `cargo test --workspace` and the wasm build all pass.
-- **By:** TBD
-- **Closes:** #171
+- **What:** `client/src/index.ts` no longer hard-codes the contract ID and
+  RPC URL. Both are configurable via `--contract` / `--rpc` flags, falling
+  back to `DEPRADAR_CONTRACT_ID` / `DEPRADAR_RPC_URL`, then to the previous
+  defaults. `client/README.md` documents the flags, the env vars and the
+  precedence order.
+- **Verified:** `npm run typecheck` passes in `client/`; the client still
+  reads the live testnet contract with the defaults and with each override.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #183
 - **Status:** In review.
 
-### deprader_router — minimum bounty amount per token — #172
+### CI — cache-friendly, faster workflow — #184
 
-- **What:** Adds an admin-set `min_amount` per allowed token (default 0,
-  with a setter and getter). `create_bounty` rejects amounts below the
-  token's minimum with the new `AmountTooSmall` error.
-- **Tests:** Contract tests cover amounts below, at and above the minimum,
-  plus the default of 0. Snapshots regenerated.
-- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
-  `cargo test --workspace` and the wasm build all pass.
-- **By:** TBD
-- **Closes:** #172
+- **What:** `.github/workflows/ci.yml` now uses `Swatinem/rust-cache` with
+  per-job cache keys, passes `--locked` to every Cargo invocation, and adds
+  a `concurrency` group that cancels superseded PR runs. Before/after job
+  timings are recorded in the PR description.
+- **Verified:** the workflow runs green on the PR.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #184
 - **Status:** In review.
 
-### deprader_router — `get_config` getter — #173
+### Docs — issue and PR labels guide — #185
 
-- **What:** Adds `get_config() -> Config`, returning the contract's
-  `REVIEW_WINDOW_SECS`, `MAX_CLAIMS_PER_BOUNTY`, `MAX_REF_LEN` and
-  `MAX_BOUNTY_DURATION_SECS` as a struct, so front ends stop hard-coding
-  them.
-- **Tests:** A contract test asserts the getter matches the constants.
-  Snapshots regenerated.
-- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
-  `cargo test --workspace` and the wasm build all pass.
-- **By:** TBD
-- **Closes:** #173
+- **What:** Adds a "Labels" section to `CONTRIBUTING.md` listing every label
+  the repo uses — the area labels (`typosquat`, `contract`, `frontend`, …),
+  `good first issue` and `Stellar Wave` — and when each is applied.
+- **Verified:** every command and link in the new section was checked.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #185
 - **Status:** In review.

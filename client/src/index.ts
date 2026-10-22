@@ -5,17 +5,22 @@
  *
  * Usage:
  *   npm start -- --bounty-id 1
+ *   npm start -- --bounty-id 1 --contract C... --rpc https://...
  *
  * --bounty-id defaults to 1, the bounty used in the on-chain
  * create_bounty -> submit_claim -> reject_claim -> release cycle described
  * in PROGRESS.md, so running with no flags exercises real data.
+ *
+ * --contract / --rpc override the target deployment. When omitted, the
+ * DEPRADAR_CONTRACT_ID / DEPRADAR_RPC_URL env vars are used, falling back
+ * to the default testnet deployment below.
  */
 import { rpc } from "@stellar/stellar-sdk";
 
-const CONTRACT_ID = "CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ";
-const RPC_URL = "https://soroban-testnet.stellar.org";
+const DEFAULT_CONTRACT_ID = "CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ";
+const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";
 
-function parseArgs(argv: string[]): { bountyId: number } {
+function parseArgs(argv: string[]): { bountyId: number; contractId: string; rpcUrl: string } {
   const flags = new Map<string, string>();
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -30,21 +35,24 @@ function parseArgs(argv: string[]): { bountyId: number } {
     throw new Error(`--bounty-id must be a non-negative integer, got: ${flags.get("bounty-id")}`);
   }
 
-  return { bountyId };
+  const contractId = flags.get("contract") ?? process.env.DEPRADAR_CONTRACT_ID ?? DEFAULT_CONTRACT_ID;
+  const rpcUrl = flags.get("rpc") ?? process.env.DEPRADAR_RPC_URL ?? DEFAULT_RPC_URL;
+
+  return { bountyId, contractId, rpcUrl };
 }
 
 async function main() {
-  const { bountyId } = parseArgs(process.argv.slice(2));
-  const server = new rpc.Server(RPC_URL);
+  const { bountyId, contractId, rpcUrl } = parseArgs(process.argv.slice(2));
+  const server = new rpc.Server(rpcUrl);
 
   const health = await server.getHealth();
-  console.log(`Connected to ${RPC_URL} (status: ${health.status}, latest ledger: ${health.latestLedger})`);
-  console.log(`Contract: ${CONTRACT_ID}`);
+  console.log(`Connected to ${rpcUrl} (status: ${health.status}, latest ledger: ${health.latestLedger})`);
+  console.log(`Contract: ${contractId}`);
 
-  const { result: count } = await server.queryContract(CONTRACT_ID, "bounty_count", {});
+  const { result: count } = await server.queryContract(contractId, "bounty_count", {});
   console.log(`Bounties created: ${count}\n`);
 
-  const { result: bounty } = await server.queryContract(CONTRACT_ID, "get_bounty", { bounty_id: bountyId });
+  const { result: bounty } = await server.queryContract(contractId, "get_bounty", { bounty_id: bountyId });
   console.log(`get_bounty(${bountyId}) =>`);
   if (bounty === null) {
     console.log("  (no bounty with this ID)");
@@ -54,7 +62,7 @@ async function main() {
 
   const claimCount = Number((bounty as { claim_count: number }).claim_count);
   for (let claimId = 0; claimId < claimCount; claimId += 1) {
-    const { result: claim } = await server.queryContract(CONTRACT_ID, "get_claim", {
+    const { result: claim } = await server.queryContract(contractId, "get_claim", {
       bounty_id: bountyId,
       claim_id: claimId,
     });

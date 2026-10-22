@@ -78,7 +78,41 @@ added as a regression test next to the code it broke.
 Some tests in `src/cve/` call the live [OSV API](https://osv.dev); they skip
 (rather than fail) when the network is unavailable.
 
+## Labels
+
+Every issue and PR carries at least one **area label** naming the part of
+the repo it touches, plus any **status labels** that apply. Use this list
+when triaging or when you're unsure where a change belongs.
+
+### Area labels
+
+| Label | Applies to | When it's used |
+| --- | --- | --- |
+| `typosquat` | `src/`, `benches/typosquat.rs`, `fuzz/` | Changes to the typosquat scanner: normalization, homoglyph handling, scoring signals, or the `scan` binary. |
+| `contract` | `contracts/` | Changes to the `deprader_router` Soroban contract, its tests, or the committed `test_snapshots/`. |
+| `frontend` | `frontend/` | Changes to the web dashboard (Vite app, components, CSS tokens). |
+| `client` | `client/` | Changes to the testnet read client. |
+| `cve` | `src/cve/` | Changes to the OSV-backed vulnerability lookup and its tests. |
+| `docs` | `*.md`, `docs/` | Documentation-only changes: guides, the severity model, PROGRESS entries. |
+| `ci` | `.github/`, build config | Workflow, lint, or build-pipeline changes. |
+
+If a PR spans several areas, apply each relevant area label; the first one
+listed should be the primary area.
+
+### Status labels
+
+| Label | When it's used |
+| --- | --- |
+| `good first issue` | Small, self-contained issues with clear acceptance criteria and no prior codebase knowledge required — a good entry point for new contributors. |
+| `help wanted` | Issues the maintainers have scoped but aren't actively working on; outside contributions are explicitly welcome. |
+| `Stellar Wave` | Issues included in a Stellar Wave contribution round. Comment on the issue to be assigned before starting, and reference the issue with `Closes #N` in your PR. |
+
+Comment on an issue before starting work so it can be assigned to you, and
+make sure your PR references the issue it closes (see
+[Pull Requests](#pull-requests)).
+
 ## Pull Requests
+=======
 
 - One issue per PR where possible, with `Closes #N` in the description.
 - Keep CI green: fmt, clippy, tests, the wasm build, and the client
