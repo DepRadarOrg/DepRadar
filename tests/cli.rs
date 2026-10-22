@@ -376,3 +376,155 @@ fn completions_rejects_unknown_shell() {
     let output = depradar().args(["completions", "tcsh"]).output().unwrap();
     assert_eq!(output.status.code(), Some(2));
 }
+
+// ── depradar explain tests ───────────────────────────────────────────────────
+
+/// Canned OSV advisory served by the mock server for `GET /v1/vulns/{id}`.
+const EXPLAIN_ADVISORY_JSON: &str = r#"{
+  "id": "GHSA-aaaa-bbbb-cccc",
+  "summary": "Prototype pollution in example-package",
+  "details": "A long description that should not be required for the test.",
+  "aliases": ["CVE-2024-0001"],
+  "severity": [
+    { "type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" }
+  ],
+  "affected": [
+    {
+      "package": { "ecosystem": "npm", "name": "example-package" },
+      "ranges": [
+        { "type": "SEMVER", "events": [{ "introduced": "0.0.0" }, { "fixed": "1.2.3" }] }
+      ]
+    }
+  ],
+  "references": [
+    { "type": "ADVISORY", "url": "https://example.com/advisories/GHSA-aaaa-bbbb-cccc" },
+    { "type": "WEB", "url": "https://example.com/blog/prototype-pollution" }
+  ]
+}"#;
+
+/// Starts a tiny HTTP server that answers `GET /v1/vulns/{id}` with the canned
+/// advisory for `GHSA-aaaa-bbbb-cccc` and 404 for anything else. Returns the
+/// base URL (e.g. `http://127.0.0.1:PORT`) and a handle to stop the server.
+fn start_mock_osv_server() -> (String, std::thread::JoinHandle<()>) {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let base_url = format!("http://{addr}");
+
+    let handle = std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream {
+                Ok(stream) => stream,
+                Err(_) => break,
+            };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut request_line = String::new();
+            if reader.read_line(&mut request_line).is_err() {
+                continue;
+            }
+            // Drain the remaining request headers.
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) => break,
+                    Ok(_) if line == "\r\n" || line == "\n" => break,
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+            }
+
+            let path = request_line.split_whitespace().nth(1).unwrap_or("");
+            let (status, body) = if path == "/v1/vulns/GHSA-aaaa-bbbb-cccc" {
+                ("200 OK", EXPLAIN_ADVISORY_JSON)
+            } else {
+                ("404 Not Found", r#"{"code":5,"message":"not found"}"#)
+            };
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+
+    (base_url, handle)
+}
+
+#[test]
+fn explain_text_prints_advisory_details() {
+    let (base_url, _handle) = start_mock_osv_server();
+
+    let output = depradar()
+        .env("DEPRADAR_OSV_BASE_URL", &base_url)
+        .args(["explain", "GHSA-aaaa-bbbb-cccc"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "explain failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Prototype pollution in example-package"),
+        "summary missing: {stdout}"
+    );
+    assert!(stdout.contains("GHSA-aaaa-bbbb-cccc"), "{stdout}");
+    assert!(
+        stdout.to_lowercase().contains("severity"),
+        "severity missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("example-package"),
+        "affected package missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("1.2.3"),
+        "fixed version missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("https://example.com/advisories/GHSA-aaaa-bbbb-cccc"),
+        "references missing: {stdout}"
+    );
+}
+
+#[test]
+fn explain_json_is_one_document() {
+    let (base_url, _handle) = start_mock_osv_server();
+
+    let output = depradar()
+        .env("DEPRADAR_OSV_BASE_URL", &base_url)
+        .args(["--format", "json", "explain", "GHSA-aaaa-bbbb-cccc"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "explain failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json = stdout_json(&output);
+    assert_eq!(json["id"], "GHSA-aaaa-bbbb-cccc");
+    assert_eq!(json["summary"], "Prototype pollution in example-package");
+}
+
+#[test]
+fn explain_unknown_advisory_exits_with_code_2() {
+    let (base_url, _handle) = start_mock_osv_server();
+
+    let output = depradar()
+        .env("DEPRADAR_OSV_BASE_URL", &base_url)
+        .args(["explain", "GHSA-0000-0000-0000"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).starts_with("error: "),
+        "expected an error message on stderr"
+    );
+}

@@ -17,7 +17,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env,
-    IntoVal, String, TryFromVal, Val,
+    IntoVal, String, Symbol, TryFromVal, Val,
 };
 
 /// Ledgers per day at Stellar's ~5s close time.
@@ -35,8 +35,17 @@ pub const MAX_BOUNTY_DURATION_SECS: u64 = 365 * 24 * 60 * 60;
 /// Upper bound on claims per bounty, so one bounty can't be spammed into
 /// unbounded storage.
 pub const MAX_CLAIMS_PER_BOUNTY: u32 = 50;
+/// Upper bound on the number of claims indexed per claimant. The per-claimant
+/// index is a single persistent vector, so this cap keeps it bounded in size;
+/// once a claimant reaches it, further `submit_claim` calls fail with
+/// [`Error::TooManyClaims`].
+pub const MAX_CLAIMS_PER_CLAIMANT: u32 = 200;
 /// Upper bound (in bytes) for `issue_ref` / `proof_ref`.
 pub const MAX_REF_LEN: u32 = 256;
+/// Upper bound (in bytes) for the optional `package` metadata field.
+pub const MAX_PACKAGE_LEN: u32 = 128;
+/// Upper bound (in bytes) for the optional `ecosystem` metadata field.
+pub const MAX_ECOSYSTEM_LEN: u32 = 32;
 
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -60,6 +69,12 @@ pub enum ClaimStatus {
 pub struct Bounty {
     pub creator: Address,
     pub issue_ref: String,
+    /// Optional ecosystem the finding belongs to (e.g. `soroban`).
+    pub ecosystem: Option<Symbol>,
+    /// Optional package name the finding affects.
+    pub package: Option<String>,
+    /// Optional severity score for the finding.
+    pub severity: Option<u32>,
     pub amount: i128,
     pub token: Address,
     pub status: BountyStatus,
@@ -92,7 +107,11 @@ enum DataKey {
     Bounty(u64),
     Claim(u64, u32),
     ClaimBy(u64, Address),
+    /// Per-claimant index of `(bounty_id, claim_id)` pairs, in submission
+    /// order, capped at [`MAX_CLAIMS_PER_CLAIMANT`].
+    ClaimsOf(Address),
     AllowedToken(Address),
+    Reviewer(Address),
     Paused,
 }
 
@@ -200,6 +219,37 @@ impl DepRaderRouter {
         env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
+    // ------------------------------------------------------------ reviewers
+
+    /// Admin-only: grants `reviewer` permission to reject claims and release
+    /// bounties without handing over full admin control.
+    pub fn add_reviewer(env: Env, reviewer: Address) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        set_persistent(&env, &DataKey::Reviewer(reviewer.clone()), &true);
+        env.events()
+            .publish((symbol_short!("rev_added"),), (reviewer, admin));
+        Ok(())
+    }
+
+    /// Admin-only: revokes a reviewer's permission.
+    pub fn remove_reviewer(env: Env, reviewer: Address) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Reviewer(reviewer.clone()));
+        env.events()
+            .publish((symbol_short!("rev_rmvd"),), (reviewer, admin));
+        Ok(())
+    }
+
+    /// Returns whether `reviewer` is currently registered as a reviewer.
+    pub fn is_reviewer(env: Env, reviewer: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Reviewer(reviewer))
+            .unwrap_or(false)
+    }
+
     // --------------------------------------------------- token allowlist
 
     /// Admin-only: adds a token to the allowlist.
@@ -235,10 +285,18 @@ impl DepRaderRouter {
     /// Locks `amount` of `token` from `creator` against a new bounty and
     /// returns its contract-assigned ID. Claims are accepted until
     /// `deadline` (a ledger timestamp, in seconds).
+    ///
+    /// `ecosystem`, `package` and `severity` are optional structured finding
+    /// metadata; when provided they are validated and stored alongside the
+    /// free-text `issue_ref`.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_bounty(
         env: Env,
         creator: Address,
         issue_ref: String,
+        ecosystem: Option<Symbol>,
+        package: Option<String>,
+        severity: Option<u32>,
         amount: i128,
         token: Address,
         deadline: u64,
@@ -257,6 +315,7 @@ impl DepRaderRouter {
             return Err(Error::InvalidAmount);
         }
         check_ref(&issue_ref)?;
+        check_metadata(&ecosystem, &package)?;
         let now = env.ledger().timestamp();
         if deadline <= now || deadline - now > MAX_BOUNTY_DURATION_SECS {
             return Err(Error::InvalidDeadline);
@@ -278,6 +337,9 @@ impl DepRaderRouter {
         let bounty = Bounty {
             creator: creator.clone(),
             issue_ref,
+            ecosystem,
+            package,
+            severity,
             amount,
             token: token.clone(),
             status: BountyStatus::Open,
@@ -502,6 +564,16 @@ impl DepRaderRouter {
         bounty.pending_claims += 1;
         set_persistent(&env, &key, &bounty);
 
+        // Index the claim under its claimant for profile lookups.
+        let claims_key = DataKey::ClaimsOf(claimant.clone());
+        let mut claims: soroban_sdk::Vec<(u64, u32)> =
+            get_persistent(&env, &claims_key).unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        if claims.len() >= MAX_CLAIMS_PER_CLAIMANT {
+            return Err(Error::TooManyClaims);
+        }
+        claims.push_back((bounty_id, claim_id));
+        set_persistent(&env, &claims_key, &claims);
+
         env.events()
             .publish((symbol_short!("claimed"), bounty_id), (claim_id, claimant));
         Ok(claim_id)
@@ -519,6 +591,41 @@ impl DepRaderRouter {
         env.storage()
             .persistent()
             .get(&DataKey::ClaimBy(bounty_id, claimant))
+    }
+
+    /// Returns a page of the `(bounty_id, claim_id)` pairs claimed by
+    /// `claimant`, in submission order.
+    ///
+    /// The per-claimant index is capped at [`MAX_CLAIMS_PER_CLAIMANT`]
+    /// entries; once a claimant hits the cap, new claims are rejected with
+    /// [`Error::TooManyClaims`]. Pagination is zero-based: `start` is the
+    /// index of the first entry to return and `limit` is the maximum number
+    /// of entries to return. If `start` is past the end of the index or
+    /// `limit` is zero, an empty vector is returned. The result is the slice
+    /// `[start, min(start + limit, len))`.
+    pub fn get_claims_of(
+        env: Env,
+        claimant: Address,
+        start: u32,
+        limit: u32,
+    ) -> soroban_sdk::Vec<(u64, u32)> {
+        let claims: soroban_sdk::Vec<(u64, u32)> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ClaimsOf(claimant))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+
+        let len = claims.len();
+        let mut out = soroban_sdk::Vec::new(&env);
+        if limit == 0 || start >= len {
+            return out;
+        }
+
+        let end = start.saturating_add(limit).min(len);
+        for i in start..end {
+            out.push_back(claims.get(i).unwrap());
+        }
+        out
     }
 
     /// Allows a claimant to withdraw their own pending claim.
@@ -555,10 +662,15 @@ impl DepRaderRouter {
         Ok(())
     }
 
-    /// Admin-only: marks a pending claim as rejected. The bounty stays open
-    /// for other claims.
-    pub fn reject_claim(env: Env, bounty_id: u64, claim_id: u32) -> Result<(), Error> {
-        let admin = require_admin(&env)?;
+    /// Admin- or reviewer-only: marks a pending claim as rejected. The bounty
+    /// stays open for other claims.
+    pub fn reject_claim(
+        env: Env,
+        caller: Address,
+        bounty_id: u64,
+        claim_id: u32,
+    ) -> Result<(), Error> {
+        let caller = require_admin_or_reviewer(&env, caller)?;
         let (mut bounty, mut claim) = load_open_pending(&env, bounty_id, claim_id)?;
 
         claim.status = ClaimStatus::Rejected;
@@ -567,15 +679,20 @@ impl DepRaderRouter {
         set_persistent(&env, &DataKey::Bounty(bounty_id), &bounty);
 
         env.events()
-            .publish((symbol_short!("rejected"), bounty_id), (claim_id, admin));
+            .publish((symbol_short!("rejected"), bounty_id), (claim_id, caller));
         Ok(())
     }
 
-    /// Admin-only: pays the locked funds to the chosen claim's claimant and
-    /// closes the bounty. Works after the deadline too, so claims submitted
-    /// in time can still be paid during the review window.
-    pub fn release(env: Env, bounty_id: u64, claim_id: u32) -> Result<(), Error> {
-        let admin = require_admin(&env)?;
+    /// Admin- or reviewer-only: pays the locked funds to the chosen claim's
+    /// claimant and closes the bounty. Works after the deadline too, so claims
+    /// submitted in time can still be paid during the review window.
+    pub fn release(
+        env: Env,
+        caller: Address,
+        bounty_id: u64,
+        claim_id: u32,
+    ) -> Result<(), Error> {
+        let caller = require_admin_or_reviewer(&env, caller)?;
 
         if Self::is_paused(env.clone()) {
             return Err(Error::Paused);
@@ -598,7 +715,7 @@ impl DepRaderRouter {
 
         env.events().publish(
             (symbol_short!("released"), bounty_id),
-            (claim_id, claim.claimant, bounty.amount, admin),
+            (claim_id, claim.claimant, bounty.amount, caller),
         );
         Ok(())
     }
@@ -701,6 +818,27 @@ fn require_admin(env: &Env) -> Result<Address, Error> {
     Ok(admin)
 }
 
+/// Requires `caller`'s auth and checks it is either the stored admin or a
+/// registered reviewer. Returns the caller on success.
+fn require_admin_or_reviewer(env: &Env, caller: Address) -> Result<Address, Error> {
+    caller.require_auth();
+    let admin = stored_admin(env)?;
+    if caller == admin {
+        bump_instance(env);
+        return Ok(caller);
+    }
+    let is_reviewer: bool = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Reviewer(caller.clone()))
+        .unwrap_or(false);
+    if !is_reviewer {
+        return Err(Error::NotAuthorized);
+    }
+    bump_instance(env);
+    Ok(caller)
+}
+
 /// Loads a bounty that must be `Open` and one of its claims that must be
 /// `Pending` — the precondition shared by `reject_claim` and `release`.
 fn load_open_pending(env: &Env, bounty_id: u64, claim_id: u32) -> Result<(Bounty, Claim), Error> {
@@ -720,6 +858,21 @@ fn load_open_pending(env: &Env, bounty_id: u64, claim_id: u32) -> Result<(Bounty
 fn check_ref(r: &String) -> Result<(), Error> {
     if r.is_empty() || r.len() > MAX_REF_LEN {
         return Err(Error::InvalidReference);
+    }
+    Ok(())
+}
+
+/// Validates the optional structured finding metadata on a bounty.
+fn check_metadata(ecosystem: &Option<Symbol>, package: &Option<String>) -> Result<(), Error> {
+    if let Some(sym) = ecosystem {
+        if sym.len() == 0 || sym.len() > MAX_ECOSYSTEM_LEN {
+            return Err(Error::InvalidReference);
+        }
+    }
+    if let Some(pkg) = package {
+        if pkg.is_empty() || pkg.len() > MAX_PACKAGE_LEN {
+            return Err(Error::InvalidReference);
+        }
     }
     Ok(())
 }
