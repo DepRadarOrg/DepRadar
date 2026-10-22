@@ -1,0 +1,47 @@
+# cargo-deny configuration — run with `cargo deny check licenses bans sources`.
+# Advisories are covered by `cargo audit` in the Dependency Audit workflow.
+
+[graph]
+all-features = true
+
+[licenses]
+# Permissive licenses only. Every dependency must be covered by at least one
+# of these (for dual-licensed crates, either side is enough).
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+]
+confidence-threshold = 0.8
+# The allowlist is a policy, not an inventory: don't warn when a listed
+# license isn't currently used by any dependency.
+unused-allowed-license = "allow"
+# Narrow, per-crate exceptions for transitive dependencies outside the list.
+exceptions = [
+  # Weak (file-level) copyleft, pulled in by `dirs` -> `dirs-sys`; used unmodified.
+  { allow = ["MPL-2.0"], crate = "option-ext" },
+  # Permissive data license covering the bundled Mozilla root certificates (via `reqwest`).
+  { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
+]
+
+[licenses.private]
+# Workspace crates are `publish = false` and licensed by the repo's LICENSE.
+ignore = true
+
+[bans]
+# Duplicate versions are reported but don't fail the check: several come from
+# upstream crates (e.g. `windows-sys`) and can't be unified from here.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

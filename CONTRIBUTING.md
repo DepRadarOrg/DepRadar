@@ -44,6 +44,12 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 # Build the contract to wasm
 cargo build -p deprader-router --target wasm32v1-none --release --locked
 
+# Build the typosquat scanner to wasm (for the dashboard)
+cargo build -p typosquat-wasm --target wasm32-unknown-unknown --release --locked
+
+# License, banned-crate and source checks (`cargo install cargo-deny`)
+cargo deny check licenses bans sources
+
 # Try the typosquat scanner
 cargo run --bin scan -- expresss
 

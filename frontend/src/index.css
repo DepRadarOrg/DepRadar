@@ -773,6 +773,35 @@ a.card:hover {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.scanner {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.scanner .state {
+  padding: 1rem;
+}
+.scanner-confidence {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--amber);
+}
+.scanner-signals {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.scanner-signals li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid var(--amber);
+  border-radius: var(--radius-sm);
+  background: var(--amber-soft);
+}
 .copy {
   flex: none;
   padding: 0.15rem 0.6rem;
@@ -795,6 +824,15 @@ a.card:hover {
 .state-error {
   flex-direction: column;
   border-color: rgba(248, 113, 113, 0.5);
+}
+.crash {
+  max-width: 40rem;
+  margin: 15vh auto;
+}
+.crash code {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
 .spinner {
   width: 16px;
