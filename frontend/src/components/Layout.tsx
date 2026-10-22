@@ -21,6 +21,9 @@ export function Layout() {
             DepRadar
           </Link>
           <nav className="topbar-meta">
+            <Link to="/about" className="btn btn-ghost">
+              About
+            </Link>
             <span className="net">
               <span className="live-dot" aria-hidden />
               {NETWORK}

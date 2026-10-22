@@ -69,7 +69,36 @@ impl Setup<'_> {
             &AMOUNT,
             &self.token.address,
             &DEADLINE,
+            &Some(symbol_short!("rust")),
+            &Some(self.s("serde")),
+            &Some(3),
         )
+    }
+
+    fn create_with_meta(
+        &self,
+        issue_ref: &str,
+        ecosystem: Option<Symbol>,
+        package: Option<&str>,
+        severity: Option<u32>,
+    ) -> Result<u64, Error> {
+        let package = package.map(|p| self.s(p));
+        self.client
+            .try_create_bounty(
+                &self.creator,
+                &self.s(issue_ref),
+                &AMOUNT,
+                &self.token.address,
+                &DEADLINE,
+                &ecosystem,
+                &package,
+                &severity,
+            )
+            .map_err(|e| e.unwrap())
+    }
+
+    fn add_reviewer(&self, reviewer: &Address) {
+        self.client.add_reviewer(&self.admin, reviewer);
     }
 
     fn claim(&self, bounty_id: u64) -> (Address, u32) {
@@ -123,6 +152,9 @@ fn test_create_requires_initialized_contract() {
         &AMOUNT,
         &token,
         &DEADLINE,
+        &None,
+        &None,
+        &None,
     );
     assert_eq!(result, Err(Ok(Error::NotInitialized)));
 }
@@ -141,6 +173,9 @@ fn test_admin_can_pause_and_resume_bounty_operations() {
             &AMOUNT,
             &t.token.address,
             &DEADLINE,
+            &None,
+            &None,
+            &None,
         ),
         Err(Ok(Error::Paused))
     );
@@ -168,6 +203,9 @@ fn test_create_bounty_locks_funds_and_assigns_ids() {
     let bounty = t.client.get_bounty(&first).expect("bounty should exist");
     assert_eq!(bounty.creator, t.creator);
     assert_eq!(bounty.issue_ref, t.s("org/repo#123"));
+    assert_eq!(bounty.ecosystem, Some(symbol_short!("rust")));
+    assert_eq!(bounty.package, Some(t.s("serde")));
+    assert_eq!(bounty.severity, Some(3));
     assert_eq!(bounty.amount, AMOUNT);
     assert_eq!(bounty.token, t.token.address);
     assert_eq!(bounty.status, BountyStatus::Open);
@@ -187,8 +225,16 @@ fn test_create_bounty_requires_creator_auth() {
 fn test_create_bounty_rejects_bad_input() {
     let t = setup();
     let create = |r: &str, amount: i128, deadline: u64| {
-        t.client
-            .try_create_bounty(&t.creator, &t.s(r), &amount, &t.token.address, &deadline)
+        t.client.try_create_bounty(
+            &t.creator,
+            &t.s(r),
+            &amount,
+            &t.token.address,
+            &deadline,
+            &None,
+            &None,
+            &None,
+        )
     };
 
     assert_eq!(create("x", 0, DEADLINE), Err(Ok(Error::InvalidAmount)));
@@ -211,6 +257,85 @@ fn test_create_bounty_rejects_bad_input() {
     // Nothing was locked and no ID was consumed.
     assert_eq!(t.token.balance(&t.client.address), 0);
     assert_eq!(t.client.bounty_count(), 0);
+}
+
+// ------------------------------------------------ structured metadata (#117)
+
+#[test]
+fn test_create_bounty_stores_structured_metadata() {
+    let t = setup();
+    let id = t
+        .create_with_meta(
+            "org/repo#7",
+            Some(symbol_short!("npm")),
+            Some("lodash"),
+            Some(9),
+        )
+        .unwrap();
+
+    let bounty = t.client.get_bounty(&id).unwrap();
+    assert_eq!(bounty.issue_ref, t.s("org/repo#7"));
+    assert_eq!(bounty.ecosystem, Some(symbol_short!("npm")));
+    assert_eq!(bounty.package, Some(t.s("lodash")));
+    assert_eq!(bounty.severity, Some(9));
+}
+
+#[test]
+fn test_create_bounty_metadata_is_optional() {
+    let t = setup();
+    let id = t.create_with_meta("org/repo#8", None, None, None).unwrap();
+
+    let bounty = t.client.get_bounty(&id).unwrap();
+    assert_eq!(bounty.ecosystem, None);
+    assert_eq!(bounty.package, None);
+    assert_eq!(bounty.severity, None);
+}
+
+#[test]
+fn test_create_bounty_rejects_empty_metadata() {
+    let t = setup();
+    assert_eq!(
+        t.create_with_meta("org/repo#9", Some(symbol_short!("")), None, None),
+        Err(Error::InvalidMetadata)
+    );
+    assert_eq!(
+        t.create_with_meta("org/repo#9", None, Some(""), None),
+        Err(Error::InvalidMetadata)
+    );
+    assert_eq!(t.client.bounty_count(), 0);
+}
+
+#[test]
+fn test_create_bounty_rejects_overlong_metadata() {
+    let t = setup();
+
+    let long_eco = "e".repeat(MAX_ECOSYSTEM_LEN + 1);
+    let eco_sym = Symbol::new(&t.env, &long_eco);
+    assert_eq!(
+        t.create_with_meta("org/repo#10", Some(eco_sym), None, None),
+        Err(Error::InvalidMetadata)
+    );
+
+    let long_pkg = "p".repeat(MAX_PACKAGE_LEN + 1);
+    assert_eq!(
+        t.create_with_meta("org/repo#10", None, Some(&long_pkg), None),
+        Err(Error::InvalidMetadata)
+    );
+    assert_eq!(t.client.bounty_count(), 0);
+}
+
+#[test]
+fn test_create_bounty_still_validates_issue_ref() {
+    let t = setup();
+    assert_eq!(
+        t.create_with_meta("", Some(symbol_short!("go")), None, None),
+        Err(Error::InvalidReference)
+    );
+    let long = "a".repeat(257);
+    assert_eq!(
+        t.create_with_meta(&long, Some(symbol_short!("go")), None, None),
+        Err(Error::InvalidReference)
+    );
 }
 
 // ------------------------------------------------------------- submit_claim
@@ -322,6 +447,109 @@ fn test_submit_claim_is_capped_per_bounty() {
     );
 }
 
+// ------------------------------------------------------- claims_of index
+
+#[test]
+fn test_claims_of_indexes_across_bounties() {
+    let t = setup();
+    let claimant = Address::generate(&t.env);
+
+    let mut expected = soroban_sdk::Vec::new(&t.env);
+    for i in 0..3u64 {
+        let bounty_id = t.create();
+        let claim_id = t
+            .client
+            .submit_claim(&bounty_id, &claimant, &t.s("org/repo#123-pr-456"));
+        expected.push_back((bounty_id, claim_id));
+        // Interleave another claimant so the index is per-claimant.
+        let other = Address::generate(&t.env);
+        t.client
+            .submit_claim(&bounty_id, &other, &t.s("org/repo#123-pr-789"));
+        assert_eq!(i, bounty_id - 1);
+    }
+
+    let claims = t.client.get_claims_of(&claimant, &0, &10);
+    assert_eq!(claims, expected);
+
+    // A claimant with no claims gets an empty vec.
+    let stranger = Address::generate(&t.env);
+    assert_eq!(t.client.get_claims_of(&stranger, &0, &10).len(), 0);
+}
+
+#[test]
+fn test_claims_of_pagination() {
+    let t = setup();
+    let claimant = Address::generate(&t.env);
+
+    let mut expected = soroban_sdk::Vec::new(&t.env);
+    for _ in 0..5u64 {
+        let bounty_id = t.create();
+        let claim_id = t
+            .client
+            .submit_claim(&bounty_id, &claimant, &t.s("org/repo#123-pr-456"));
+        expected.push_back((bounty_id, claim_id));
+    }
+
+    // Slice in the middle.
+    let page = t.client.get_claims_of(&claimant, &1, &2);
+    assert_eq!(page.len(), 2);
+    assert_eq!(page.get(0).unwrap(), expected.get(1).unwrap());
+    assert_eq!(page.get(1).unwrap(), expected.get(2).unwrap());
+
+    // Limit larger than the remainder clamps to what's left.
+    let tail = t.client.get_claims_of(&claimant, &3, &10);
+    assert_eq!(tail.len(), 2);
+    assert_eq!(tail.get(0).unwrap(), expected.get(3).unwrap());
+    assert_eq!(tail.get(1).unwrap(), expected.get(4).unwrap());
+
+    // Out-of-range start yields an empty vec.
+    assert_eq!(t.client.get_claims_of(&claimant, &5, &10).len(), 0);
+    assert_eq!(t.client.get_claims_of(&claimant, &100, &10).len(), 0);
+
+    // Zero limit yields an empty vec.
+    assert_eq!(t.client.get_claims_of(&claimant, &0, &0).len(), 0);
+}
+
+#[test]
+fn test_claims_of_is_capped_per_claimant() {
+    let t = setup();
+    let claimant = Address::generate(&t.env);
+
+    // Spread the claims across several bounties so the per-bounty cap is
+    // never the limiting factor.
+    let mut bounties = soroban_sdk::Vec::new(&t.env);
+    while (bounties.len() as u32) * MAX_CLAIMS_PER_BOUNTY < MAX_CLAIMS_PER_CLAIMANT {
+        bounties.push_back(t.create());
+    }
+
+    let mut submitted = 0u32;
+    'outer: for bounty_id in bounties.iter() {
+        for _ in 0..MAX_CLAIMS_PER_BOUNTY {
+            if submitted == MAX_CLAIMS_PER_CLAIMANT {
+                break 'outer;
+            }
+            t.client
+                .submit_claim(&bounty_id, &claimant, &t.s("org/repo#123-pr-456"));
+            submitted += 1;
+        }
+    }
+    assert_eq!(submitted, MAX_CLAIMS_PER_CLAIMANT);
+    assert_eq!(
+        t.client
+            .get_claims_of(&claimant, &0, &MAX_CLAIMS_PER_CLAIMANT)
+            .len(),
+        MAX_CLAIMS_PER_CLAIMANT
+    );
+
+    // One more claim on a fresh bounty is rejected by the claimant cap.
+    let extra_bounty = t.create();
+    assert_eq!(
+        t.client
+            .try_submit_claim(&extra_bounty, &claimant, &t.s("org/repo#123-pr-456")),
+        Err(Ok(Error::TooManyClaims))
+    );
+}
+
 // ------------------------------------------------------ reject / release
 
 #[test]
@@ -331,7 +559,7 @@ fn test_release_pays_chosen_claim() {
     let (_, first) = t.claim(bounty_id);
     let (winner, second) = t.claim(bounty_id);
 
-    t.client.release(&bounty_id, &second);
+    t.client.release(&t.admin, &bounty_id, &second);
     assert_eq!(t.last_auth(), t.admin);
     assert_eq!(t.last_event_topic(), symbol_short!("released"));
 
@@ -349,7 +577,7 @@ fn test_release_pays_chosen_claim() {
         ClaimStatus::Pending
     );
     assert_eq!(
-        t.client.try_release(&bounty_id, &first),
+        t.client.try_release(&t.admin, &bounty_id, &first),
         Err(Ok(Error::BountyNotOpen))
     );
 }
@@ -363,7 +591,7 @@ fn test_squatted_claim_can_be_rejected_and_real_claim_paid() {
     let (squatter, junk) = t.claim(bounty_id);
     let (finder, real) = t.claim(bounty_id);
 
-    t.client.reject_claim(&bounty_id, &junk);
+    t.client.reject_claim(&t.admin, &bounty_id, &junk);
     assert_eq!(t.last_auth(), t.admin);
     assert_eq!(t.last_event_topic(), symbol_short!("rejected"));
     assert_eq!(
@@ -374,7 +602,7 @@ fn test_squatted_claim_can_be_rejected_and_real_claim_paid() {
 
     // A rejected claim can't be paid or re-submitted.
     assert_eq!(
-        t.client.try_release(&bounty_id, &junk),
+        t.client.try_release(&t.admin, &bounty_id, &junk),
         Err(Ok(Error::ClaimNotPending))
     );
     assert_eq!(
@@ -383,7 +611,7 @@ fn test_squatted_claim_can_be_rejected_and_real_claim_paid() {
         Err(Ok(Error::DuplicateClaim))
     );
 
-    t.client.release(&bounty_id, &real);
+    t.client.release(&t.admin, &bounty_id, &real);
     assert_eq!(t.token.balance(&finder), AMOUNT);
     assert_eq!(t.token.balance(&squatter), 0);
 }
@@ -395,7 +623,7 @@ fn test_release_works_during_review_window() {
     let (claimant, claim_id) = t.claim(bounty_id);
 
     t.env.ledger().set_timestamp(DEADLINE + 60);
-    t.client.release(&bounty_id, &claim_id);
+    t.client.release(&t.admin, &bounty_id, &claim_id);
     assert_eq!(t.token.balance(&claimant), AMOUNT);
 }
 
@@ -405,22 +633,22 @@ fn test_release_and_reject_errors() {
     let bounty_id = t.create();
 
     assert_eq!(
-        t.client.try_release(&bounty_id, &0),
+        t.client.try_release(&t.admin, &bounty_id, &0),
         Err(Ok(Error::ClaimNotFound))
     );
     assert_eq!(
-        t.client.try_reject_claim(&bounty_id, &0),
+        t.client.try_reject_claim(&t.admin, &bounty_id, &0),
         Err(Ok(Error::ClaimNotFound))
     );
     assert_eq!(
-        t.client.try_release(&999, &0),
+        t.client.try_release(&t.admin, &999, &0),
         Err(Ok(Error::BountyNotFound))
     );
 
     let (_, claim_id) = t.claim(bounty_id);
-    t.client.release(&bounty_id, &claim_id);
+    t.client.release(&t.admin, &bounty_id, &claim_id);
     assert_eq!(
-        t.client.try_release(&bounty_id, &claim_id),
+        t.client.try_release(&t.admin, &bounty_id, &claim_id),
         Err(Ok(Error::BountyNotOpen))
     );
 }
@@ -433,8 +661,14 @@ fn test_release_without_admin_auth_fails() {
 
     // Drop the blanket auth mock: nobody has signed anything.
     t.env.set_auths(&[]);
-    assert!(t.client.try_release(&bounty_id, &claim_id).is_err());
-    assert!(t.client.try_reject_claim(&bounty_id, &claim_id).is_err());
+    assert!(t
+        .client
+        .try_release(&t.admin, &bounty_id, &claim_id)
+        .is_err());
+    assert!(t
+        .client
+        .try_reject_claim(&t.admin, &bounty_id, &claim_id)
+        .is_err());
 
     assert_eq!(t.token.balance(&claimant), 0);
     assert_eq!(t.token.balance(&t.client.address), AMOUNT);
@@ -467,7 +701,7 @@ fn test_admin_can_cancel_any_time() {
         Err(Ok(Error::BountyNotOpen))
     );
     assert_eq!(
-        t.client.try_release(&bounty_id, &0),
+        t.client.try_release(&t.admin, &bounty_id, &0),
         Err(Ok(Error::BountyNotOpen))
     );
     assert_eq!(
@@ -491,7 +725,7 @@ fn test_creator_can_cancel_after_deadline_with_no_pending_claims() {
     let t = setup();
     let bounty_id = t.create();
     let (_, junk) = t.claim(bounty_id);
-    t.client.reject_claim(&bounty_id, &junk);
+    t.client.reject_claim(&t.admin, &bounty_id, &junk);
 
     t.env.ledger().set_timestamp(DEADLINE);
     t.client.cancel_bounty(&t.creator, &bounty_id);
@@ -562,7 +796,7 @@ fn test_admin_rotation_is_two_step() {
     // Admin-gated calls now need the new admin's signature.
     let bounty_id = t.create();
     let (_, claim_id) = t.claim(bounty_id);
-    t.client.release(&bounty_id, &claim_id);
+    t.client.release(&new_admin, &bounty_id, &claim_id);
     assert_eq!(t.last_auth(), new_admin);
 }
 
@@ -579,7 +813,7 @@ fn test_release_split_50_50() {
     shares.push_back((claim1, 5_000));
     shares.push_back((claim2, 5_000));
 
-    t.client.release_split(&bounty_id, &shares);
+    t.client.release_split(&t.admin, &bounty_id, &shares);
     assert_eq!(t.last_auth(), t.admin);
 
     // Each gets 200 (AMOUNT=400 / 2)
@@ -613,7 +847,7 @@ fn test_release_split_rounding_remainder() {
     shares.push_back((claim2, 3_333));
     shares.push_back((claim3, 3_334));
 
-    t.client.release_split(&bounty_id, &shares);
+    t.client.release_split(&t.admin, &bounty_id, &shares);
 
     // AMOUNT = 400
     // claim1: first share, gets remainder = 400 - 133 - 133 = 134
@@ -637,7 +871,7 @@ fn test_release_split_rejects_invalid_sum() {
     shares.push_back((claim2, 4_000));
 
     assert_eq!(
-        t.client.try_release_split(&bounty_id, &shares),
+        t.client.try_release_split(&t.admin, &bounty_id, &shares),
         Err(Ok(Error::InvalidShares))
     );
 
@@ -656,7 +890,7 @@ fn test_release_split_rejects_duplicate_claim() {
     shares.push_back((claim1, 5_000));
 
     assert_eq!(
-        t.client.try_release_split(&bounty_id, &shares),
+        t.client.try_release_split(&t.admin, &bounty_id, &shares),
         Err(Ok(Error::InvalidShares))
     );
 }
@@ -669,14 +903,14 @@ fn test_release_split_rejects_non_pending_claim() {
     let (_, claim2) = t.claim(bounty_id);
 
     // Reject claim2 first
-    t.client.reject_claim(&bounty_id, &claim2);
+    t.client.reject_claim(&t.admin, &bounty_id, &claim2);
 
     let mut shares = soroban_sdk::Vec::new(&t.env);
     shares.push_back((claim1, 5_000));
     shares.push_back((claim2, 5_000));
 
     assert_eq!(
-        t.client.try_release_split(&bounty_id, &shares),
+        t.client.try_release_split(&t.admin, &bounty_id, &shares),
         Err(Ok(Error::ClaimNotPending))
     );
 }
@@ -743,7 +977,7 @@ fn test_fund_bounty_rejects_closed_bounty() {
     let t = setup();
     let bounty_id = t.create();
     let (_, claim_id) = t.claim(bounty_id);
-    t.client.release(&bounty_id, &claim_id);
+    t.client.release(&t.admin, &bounty_id, &claim_id);
 
     let funder2 = Address::generate(&t.env);
     assert_eq!(
@@ -828,7 +1062,7 @@ fn test_extend_deadline_rejects_closed_bounty() {
     let t = setup();
     let bounty_id = t.create();
     let (_, claim_id) = t.claim(bounty_id);
-    t.client.release(&bounty_id, &claim_id);
+    t.client.release(&t.admin, &bounty_id, &claim_id);
 
     assert_eq!(
         t.client
@@ -886,6 +1120,9 @@ fn test_create_bounty_rejects_disallowed_token() {
         &AMOUNT,
         &t.token.address,
         &DEADLINE,
+        &None,
+        &None,
+        &None,
     );
     assert_eq!(result, Err(Ok(Error::TokenNotAllowed)));
 }

@@ -43,6 +43,14 @@ pub enum FindingKind {
     },
     /// OSV reports a known vulnerability affecting this exact version.
     Vulnerability { advisory_id: String },
+    /// The pinned version was yanked from crates.io or deprecated on npm.
+    /// `message` carries the registry's deprecation note when one exists.
+    Deprecated { message: Option<String> },
+    /// The package's license is not in the configured allowlist.
+    License {
+        license: String,
+        allowed: Vec<String>,
+    },
 }
 
 /// A single problem with a single dependency.
@@ -90,6 +98,17 @@ impl fmt::Display for Finding {
             }
             FindingKind::Vulnerability { advisory_id } => {
                 write!(f, ": known vulnerability {advisory_id}")
+            }
+            FindingKind::Deprecated { message } => match message {
+                Some(message) => write!(f, ": deprecated ({message})"),
+                None => write!(f, ": yanked"),
+            },
+            FindingKind::License { license, allowed } => {
+                write!(f, ": license \"{license}\" not in allowlist")?;
+                if !allowed.is_empty() {
+                    write!(f, " ({})", allowed.join(", "))?;
+                }
+                Ok(())
             }
         }
     }
