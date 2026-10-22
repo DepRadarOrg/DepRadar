@@ -23,6 +23,15 @@ function enumTag(value: unknown): string {
 
 type Raw = Record<string, unknown>;
 
+/** Optional contract fields decode as `undefined`/`null` when absent. */
+function optionalString(value: unknown): string | undefined {
+  return value == null ? undefined : String(value);
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return value == null ? undefined : Number(value);
+}
+
 export function parseBounty(id: number, raw: Raw): Bounty {
   return {
     id,
@@ -35,6 +44,9 @@ export function parseBounty(id: number, raw: Raw): Bounty {
     deadline: Number(raw.deadline),
     claimCount: Number(raw.claim_count),
     pendingClaims: Number(raw.pending_claims),
+    ecosystem: optionalString(raw.ecosystem),
+    package: optionalString(raw.package),
+    severity: optionalNumber(raw.severity),
   };
 }
 

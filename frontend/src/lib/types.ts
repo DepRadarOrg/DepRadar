@@ -19,6 +19,12 @@ export interface Bounty {
   deadline: number;
   claimCount: number;
   pendingClaims: number;
+  /** Optional structured finding metadata: ecosystem symbol (e.g. "stellar"). */
+  ecosystem?: string;
+  /** Optional structured finding metadata: affected package name. */
+  package?: string;
+  /** Optional structured finding metadata: severity level. */
+  severity?: number;
 }
 
 /** Mirrors the contract's `Claim` struct, with its IDs attached. */

@@ -620,3 +620,38 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** coderolisa
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
+
+### deprader_router — reviewer role, structured bounty metadata, balance invariant tests
+
+- **What:** Three contract changes in `contracts/deprader_router`:
+  - **Reviewer role (#116).** The admin can now delegate review with
+    `add_reviewer(reviewer)` / `remove_reviewer(reviewer)` (admin-only,
+    each emits a `reviewer_added` / `reviewer_removed` event, and
+    `is_reviewer(address)` reads the set). `reject_claim` and `release`
+    accept the stored admin *or* a registered reviewer, each authenticating
+    itself; the admin key is no longer needed to review claims. Config,
+    pause, upgrade and reviewer management stay admin-only.
+  - **Structured finding metadata (#117).** `Bounty` gains optional
+    `ecosystem: Option<Symbol>`, `package: Option<String>` and
+    `severity: Option<u32>` fields, set through new `create_bounty`
+    arguments. Lengths are validated (ecosystem symbol and package name
+    bounded, severity range-checked) and `issue_ref` is kept as free text.
+    `frontend/src/lib/types.ts` and `parseBounty` in
+    `frontend/src/lib/contract.ts` were updated in the same change to read
+    the new fields.
+  - **Balance invariant tests (#118).** A seeded, randomized test runs a few
+    hundred sequences of create / claim / reject / release / cancel and
+    asserts after every step that the contract's token balance equals the
+    sum of `amount` over `Open` bounties. The seed is printed on failure and
+    the test runs well under 10s.
+- **Tests:** Contract tests extended with the full permission matrix
+  (admin, reviewer, stranger × each entry point), metadata validation cases
+  (missing, empty, over-long and out-of-range values), and the randomized
+  invariant test. Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the `wasm32v1-none` release build of the
+  contract all pass; in `frontend/`, `npm run lint`, `typecheck`, `test`
+  and `build` pass.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #116, #117, #118
+- **Status:** In review.
