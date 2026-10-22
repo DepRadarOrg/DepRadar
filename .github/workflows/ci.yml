@@ -61,6 +61,23 @@ jobs:
       - name: Build deprader_router
         run: cargo build -p deprader-router --target wasm32v1-none --release --locked
 
+  self-scan:
+    name: scan own lockfiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: self-scan
+      - name: Build depradar
+        run: cargo build --locked --bin depradar
+      - name: Scan Cargo.lock and package-lock.json files
+        run: |
+          for lockfile in Cargo.lock client/package-lock.json frontend/package-lock.json; do
+            ./target/debug/depradar --fail-on critical scan "$lockfile"
+          done
+
   client:
     name: client typecheck
     runs-on: ubuntu-latest

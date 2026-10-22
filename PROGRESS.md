@@ -682,3 +682,54 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** ALLEN-AYODEJI
 - **Closes:** #185
 - **Status:** In review.
+
+### Integration test — scan → bounty on a local contract — #161
+
+- **What:** Adds [`tests/scan_to_bounty.rs`](tests/scan_to_bounty.rs). It
+  scores `expresss` with `score_package`, turns the result into a
+  typosquat `Finding`, builds the bounty's `issue_ref` with
+  `Finding::issue_ref`, then uses soroban testutils to create the bounty on a
+  locally registered router, parse the stored `issue_ref` back, submit a
+  claim and release it to the claimant. The root crate gains
+  `deprader-router` (with `testutils`) and `soroban-sdk` (with `testutils`)
+  as dev-dependencies, so the test runs in `cargo test --workspace`.
+- **By:** MamaLove360
+- **Closes:** #161
+- **Status:** In review.
+
+### Standard `issue_ref` format for findings — #162
+
+- **What:** Documents `<ecosystem>:<package>[@<version>]#<kind>[:<detail>]`
+  in [`docs/issue-ref.md`](docs/issue-ref.md). Adds `IssueRef`,
+  `IssueKind`, `format_issue_ref`, `parse_issue_ref` and
+  `Finding::issue_ref` to [`src/model.rs`](src/model.rs), and mirrors them as
+  `formatIssueRef` / `parseIssueRef` in
+  [`frontend/src/lib/format.ts`](frontend/src/lib/format.ts). Free-form refs
+  parse to "no match" so existing bounties still render as text.
+- **Tests:** Round-trip and rejection tests in both Rust and Vitest,
+  covering npm scopes, Maven coordinates and unpinned versions.
+- **By:** MamaLove360
+- **Closes:** #162
+- **Status:** In review.
+
+### Security — CycloneDX SBOMs on every release — #164
+
+- **What:** [`.github/workflows/release.yml`](.github/workflows/release.yml)
+  gains an `sbom` job that generates CycloneDX JSON SBOMs with
+  `cargo cyclonedx` (CLI crate and router contract) and
+  `@cyclonedx/cyclonedx-npm` (frontend production dependencies). The
+  `publish` job waits for it and attaches the SBOMs to the GitHub Release
+  alongside the binaries. The README lists the SBOM files.
+- **By:** MamaLove360
+- **Closes:** #164
+- **Status:** In review.
+
+### CI — scan DepRadar's own lockfiles — #165
+
+- **What:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) gains a
+  `self-scan` job that builds the `depradar` CLI and runs
+  `depradar --fail-on critical scan` on `Cargo.lock`,
+  `client/package-lock.json` and `frontend/package-lock.json`.
+- **By:** MamaLove360
+- **Closes:** #165
+- **Status:** In review.
