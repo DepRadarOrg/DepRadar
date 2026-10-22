@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:wasm": "wasm-pack build ../crates/typosquat-wasm --target web --release --out-dir ../../frontend/public/wasm --out-name typosquat",
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "test": "vitest run",

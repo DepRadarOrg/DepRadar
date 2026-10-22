@@ -7,6 +7,7 @@ on:
     paths:
       - "**/Cargo.toml"
       - "Cargo.lock"
+      - "deny.toml"
       - "client/package.json"
       - "client/package-lock.json"
       - "frontend/package.json"
@@ -28,6 +29,15 @@ jobs:
         run: cargo install cargo-audit --locked
       - name: Run cargo audit
         run: cargo audit
+
+  cargo-deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses bans sources
 
   npm-audit:
     name: npm audit (client)
