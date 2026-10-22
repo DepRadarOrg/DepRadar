@@ -15,8 +15,11 @@ npm ci
 npm run dev        # http://localhost:5173
 ```
 
-The dashboard defaults to the live v2 testnet contract. To point it at
-another deployment, copy `.env.example` to `.env.local` and edit it.
+The dashboard defaults to the live v2 testnet contract. The contract ID
+lives in `src/config.ts` and can be overridden without touching code by
+copying `.env.example` to `.env.local` and editing it. After deploying a
+new contract, follow [DEPLOYMENT.md](../DEPLOYMENT.md) to update the ID
+here and in the other consumers.
 
 ## Scripts
 

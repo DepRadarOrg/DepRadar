@@ -4,6 +4,28 @@ Thanks for helping make DepRadar better. Start with an open issue labelled
 `good first issue` or `help wanted`, comment that you're picking it up, and
 open a PR that references it.
 
+## Picking an Issue
+
+Issues are triaged with labels so you can find work that matches your
+experience and available time:
+
+- `good first issue` — small, self-contained, and documented enough to
+  finish without deep context. Ideal for a first contribution.
+- `help wanted` — open to anyone; may span several files or need design
+  decisions.
+- `Stellar Wave` — part of a [Stellar Wave](https://www.drips.network/wave)
+  cycle. These issues are scoped to be completed within the wave window,
+  are usually labelled `good first issue` or `help wanted` as well, and
+  carry a point value in the issue body. Comment on the issue to be
+  assigned before you start; unassigned work may be picked up by someone
+  else.
+- `Stellar Wave: Complex` — larger Wave items that touch multiple crates or
+  need a design note in the issue thread before implementation.
+
+To claim any issue, comment that you're picking it up and wait for a
+maintainer to assign you. If you're unsure whether an issue is a good fit,
+ask in the thread — it's cheaper than a PR that has to be reworked.
+
 ## Development Setup
 
 Prerequisites: a stable Rust toolchain, the `wasm32v1-none` target (for the
@@ -102,6 +124,44 @@ make sure your PR references the issue it closes (see
 - Security-sensitive findings go through [SECURITY.md](SECURITY.md), not
   public issues.
 
+## Review Process
+
+Every PR gets a first review from a maintainer, usually within **2 business
+days**; Wave-labelled PRs are prioritised so they land inside the cycle.
+Reviews are incremental — push follow-up commits to the same branch rather
+than opening a new PR, and re-request review when you've addressed the
+comments.
+
+Reviewers work through this checklist:
+
+- [ ] The PR description links the issue with `Closes #N` and explains
+      *what* changed and *why*.
+- [ ] CI is green: `cargo fmt --all -- --check`,
+      `cargo clippy --workspace --all-targets --locked -- -D warnings`,
+      `cargo test --workspace --locked`, the wasm build, and the frontend
+      `lint`/`typecheck`/`test`/`build` jobs.
+- [ ] New behaviour has tests, and bug fixes have a regression test that
+      fails without the fix.
+- [ ] New detectors rate findings per the
+      [severity model](docs/severity.md) and add an example there.
+- [ ] Changes to `contracts/` include regenerated files under
+      `contracts/deprader_router/test_snapshots/`.
+- [ ] [PROGRESS.md](PROGRESS.md) has an entry for the issue.
+- [ ] The diff is limited to the issue's scope, and docs/commands in it
+      actually work.
+
+Common reasons a PR is sent back for changes:
+
+- **Missing tests** — new code paths or fixed bugs without coverage.
+- **Missing PROGRESS.md entry** — see [Closing Issues](#closing-issues).
+- **Unrelated changes** — drive-by refactors, formatting of untouched
+  files, or dependency bumps outside the issue's scope. Split them into
+  their own issue/PR.
+- **Failing or skipped CI** — including `--no-verify` commits and
+  `#[ignore]`d tests added to get a run green.
+- **Undocumented behaviour changes** — user-visible changes without a
+  matching docs update.
+
 ## Closing Issues
 
 No issue is closed without an entry in [PROGRESS.md](PROGRESS.md)
@@ -129,3 +189,13 @@ admin identity, replacing the one exposed by the original v1 deployment.
 Testnet funds have no real value, but don't reuse identities across
 testnet and mainnet — the contract supports `propose_admin` /
 `accept_admin` precisely so the admin can be rotated without a redeploy.
+
+## Progress Log
+
+Every merged PR adds a line to [PROGRESS.md](PROGRESS.md) in the format
+`- #<issue> — <summary> (<@handle>)`. For example, the entry for this
+documentation change is:
+
+```markdown
+- #175 — Expand CONTRIBUTING with the PR review process and Stellar Wave labels (@<your-handle>)
+```

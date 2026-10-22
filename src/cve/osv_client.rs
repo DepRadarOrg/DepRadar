@@ -401,12 +401,34 @@ pub fn query_osv(
     OsvClient::new().query(package_name, ecosystem, version)
 }
 
+/// Environment variable overriding the OSV base URL, e.g. to point at a
+/// mock server in integration tests.
+pub const OSV_BASE_URL_ENV: &str = "DEPRADAR_OSV_BASE_URL";
+
+/// The OSV base URL in effect: `DEPRADAR_OSV_BASE_URL` when set and
+/// non-empty, otherwise the public API.
+pub fn base_url() -> String {
+    match std::env::var(OSV_BASE_URL_ENV) {
+        Ok(url) if !url.trim().is_empty() => url.trim_end_matches('/').to_string(),
+        _ => OSV_BASE_URL.to_string(),
+    }
+}
+
 /// Fetches the full record for one vulnerability via `GET /v1/vulns/{id}`.
 ///
 /// Batch/query results can be sparse; this returns the complete advisory
 /// (summary, severity, references).
 pub fn get_vulnerability(id: &str) -> Result<OsvVulnerability, OsvClientError> {
-    get_vulnerability_at(OSV_BASE_URL, id)
+    get_vulnerability_at(&base_url(), id)
+}
+
+/// Fetches the full advisory for `id` via `GET /v1/vulns/{id}`, honouring
+/// the [`OSV_BASE_URL_ENV`] override.
+///
+/// This is the entry point the CLI uses for `depradar explain <advisory-id>`;
+/// it shares the HTTP/parsing logic with [`get_vulnerability`].
+pub fn fetch_vuln(id: &str) -> Result<OsvVulnerability, OsvClientError> {
+    get_vulnerability(id)
 }
 
 #[cfg(test)]

@@ -75,6 +75,20 @@ pub fn popularity_rank(name: &str) -> Option<usize> {
         .min()
 }
 
+/// Zero-based popularity rank of `name` within its own registry list (0 is
+/// the most popular), or `None` if it is in none of the lists.
+///
+/// Each dataset keeps its existing rank order (most-downloaded first), so the
+/// position in the list *is* the rank. A name present on several registries
+/// gets the best (lowest) of its ranks.
+///
+/// This is the canonical entry point for weighting typosquat matches by the
+/// popularity of the package being imitated: a near-miss of a top-10 package
+/// is far more dangerous than one of a package ranked 990.
+pub fn rank(name: &str) -> Option<usize> {
+    popularity_rank(name)
+}
+
 /// Minimal parser for a JSON document that is an array of strings.
 ///
 /// The bundled data files are fully under our control and contain only a flat
@@ -343,6 +357,52 @@ mod tests {
                 packages.iter().any(|p| p == name),
                 "expected crate '{name}' in the combined list"
             );
+        }
+    }
+
+    #[test]
+    fn rank_returns_none_for_unknown_names() {
+        assert_eq!(rank("this-package-does-not-exist-anywhere-xyz"), None);
+        assert_eq!(popularity_rank("this-package-does-not-exist-anywhere-xyz"), None);
+    }
+
+    #[test]
+    fn rank_is_zero_based_and_matches_list_position() {
+        // `react` is the first entry of the npm list, so its rank is 0.
+        assert_eq!(rank("react"), Some(0));
+        // `rank` and `popularity_rank` are the same function.
+        assert_eq!(rank("react"), popularity_rank("react"));
+    }
+
+    #[test]
+    fn react_has_a_lower_rank_than_a_tail_entry() {
+        let react_rank = rank("react").expect("expected 'react' to be ranked");
+
+        // A tail entry: the last name in the npm list is by construction the
+        // least popular entry in that dataset.
+        let npm = parse_string_array(NPM_TOP_PACKAGES_JSON);
+        let tail = npm.last().expect("npm list should not be empty");
+        let tail_rank = rank(tail).expect("expected the npm tail entry to be ranked");
+
+        assert!(
+            react_rank < tail_rank,
+            "expected 'react' (rank {react_rank}) to rank better than tail entry \
+             {tail:?} (rank {tail_rank})"
+        );
+    }
+
+    #[test]
+    fn rank_uses_the_best_rank_across_registries() {
+        // Every name in each registry list should resolve to a rank no worse
+        // than its position in that list.
+        for list in registry_lists().iter() {
+            for (position, name) in list.iter().enumerate() {
+                let resolved = rank(name).expect("listed name should be ranked");
+                assert!(
+                    resolved <= position,
+                    "rank for {name:?} was {resolved}, worse than its position {position}"
+                );
+            }
         }
     }
 }

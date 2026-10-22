@@ -2,7 +2,79 @@
 
 This document describes how to deploy and upgrade the `deprader_router` contract on Stellar.
 
-## Initial Deployment
+## Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) with the `wasm32-unknown-unknown` target:
+  ```bash
+  rustup target add wasm32-unknown-unknown
+  ```
+- The [Stellar CLI](https://developers.stellar.org/docs/tools/developer-tools/cli/stellar-cli) (v21 or newer):
+  ```bash
+  cargo install --locked stellar-cli --features opt
+  ```
+- Node.js 18+ (only needed to verify the deployment with the read client in `client/`).
+
+## Identities
+
+The Stellar CLI stores signing keys in named identities. Create one for the deployer
+and, if you want a separate admin, one for the admin:
+
+```bash
+stellar keys generate deployer --network testnet --fund
+stellar keys generate admin --network testnet --fund
+```
+
+- `--network testnet` records the network the identity defaults to.
+- `--fund` uses friendbot to fund the new account on testnet. On mainnet you must
+  fund the account manually and omit `--fund`.
+
+Show an identity's public key (this is the address you pass as `--admin`):
+
+```bash
+stellar keys address deployer
+stellar keys address admin
+```
+
+Check the balance of an identity:
+
+```bash
+stellar keys fund deployer --network testnet   # top up on testnet
+```
+
+## Scripted Deployment
+
+`scripts/deploy.sh` wraps the whole flow: it builds the optimized WASM, deploys it,
+initializes the contract with an admin, and prints the resulting contract ID.
+
+Usage:
+
+```bash
+./scripts/deploy.sh [--network <NETWORK>] [--source <IDENTITY>] [--admin <ADDRESS>]
+```
+
+| Argument | Default | Description |
+| --- | --- | --- |
+| `--network` | `testnet` | Network to deploy to (`testnet`, `futurenet`, `mainnet`, or a custom RPC name). |
+| `--source` | `deployer` | Stellar CLI identity used to sign the deploy and `initialize` transactions. |
+| `--admin` | address of `--source` | Address passed to `initialize --admin`. |
+
+Example — fresh testnet deploy with a dedicated admin:
+
+```bash
+./scripts/deploy.sh --network testnet --source deployer --admin "$(stellar keys address admin)"
+```
+
+The script prints the contract ID at the end, e.g.:
+
+```
+Contract ID: CCPR...YQJQ
+```
+
+Save that ID — it is needed for verification and for updating the client and frontend.
+
+### Manual Equivalent
+
+If you prefer to run the steps by hand, the script performs:
 
 1. Build the optimized WASM:
 ```bash
@@ -33,6 +105,49 @@ stellar contract invoke \
   --source <ADMIN_ACCOUNT> \
   --network testnet \
   -- initialize --admin <ADMIN_ADDRESS>
+```
+
+## Verifying the Deployment
+
+### With the Stellar CLI
+
+Confirm the contract responds and the admin was set:
+
+```bash
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --network testnet \
+  -- get_admin
+```
+
+### With the Read Client
+
+The read client in [`client/`](client/) queries the contract over RPC. Point it at the
+new contract ID and run it:
+
+```bash
+cd client
+npm install
+CONTRACT_ID=<CONTRACT_ID> npm start
+```
+
+If the client reads the contract ID from a different variable or file, set it there
+instead — see [`client/README.md`](client/README.md) for the exact configuration.
+
+## Updating the Contract ID
+
+After a successful deploy, update the contract ID everywhere it is referenced:
+
+- **`README.md`** — the contract ID shown in the project overview / usage examples.
+- **`client/README.md`** and the client configuration — the ID used by the read client.
+- **`frontend/`** — the ID in `frontend/src/config.ts` (or the equivalent config module)
+  and the value documented in `frontend/.env.example`. If the frontend reads the ID from
+  an environment variable, update your local `.env` as well.
+
+Search the repository to make sure no stale ID remains:
+
+```bash
+grep -rn "C[A-Z0-9]\{55\}" --include="*.md" --include="*.ts" --include="*.tsx" --include="*.example" .
 ```
 
 ## Contract Upgrade Procedure

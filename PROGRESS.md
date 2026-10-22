@@ -10,6 +10,20 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### CLI — `depradar explain <advisory-id>` — #180
+
+- **What:** Adds `depradar explain <advisory-id>` to
+  [`src/bin/depradar.rs`](src/bin/depradar.rs). It fetches the advisory from
+  OSV (`GET /v1/vulns/{id}`) and prints its summary, severity, affected
+  range, fixed version and references, so a `GHSA-…` seen in a report can be
+  inspected without leaving the terminal.
+- **Tests:** An `assert_cmd` integration test in [`tests/cli.rs`](tests/cli.rs)
+  with the OSV call mocked, checking the printed advisory details.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #180
+- **Status:** In review.
+
 ### Release binaries for the CLI — #88
 
 - **What:** Adds a tag-triggered GitHub Actions workflow that builds the
