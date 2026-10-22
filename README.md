@@ -304,6 +304,7 @@ verified, with the full trail auditable by anyone.
 - Behavioral analysis (install scripts, obfuscation, anomalous permission requests)
 - Dashboard features: filters, search, live event feed, wallet-connected actions
 - Drips payout integration
+- **RepoGuard** (`depradar repo-scan`): detect malware hidden inside repositories, their git history and open PRs. See the day-by-day plan in [ROADMAP.md](ROADMAP.md)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how to pick up a module, and
 [open issues](https://github.com/DepRadarOrg/DepRadar/issues) for what's
