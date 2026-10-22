@@ -28,6 +28,7 @@ Examples:
   depradar scan package-lock.json        Scan a lockfile for typosquats and known CVEs
   depradar scan .                        Scan every lockfile in a directory or monorepo
   depradar scan . --offline              Typosquat checks only, no OSV lookup
+  depradar explain GHSA-xxxx-xxxx-xxxx   Show details for one advisory
   depradar --format json scan . | jq     Machine-readable output for CI
   depradar watch --registry npm          Watch the npm registry and score new packages
 
@@ -86,6 +87,12 @@ enum Command {
         /// `ecosystems` in `depradar.toml`.
         #[arg(long = "ecosystem", value_name = "ECOSYSTEM")]
         ecosystems: Vec<String>,
+    },
+    /// Show details for a single advisory (summary, severity, affected
+    /// ranges, fixed version and references)
+    Explain {
+        /// The advisory ID to look up, e.g. `GHSA-xxxx-xxxx-xxxx`
+        id: String,
     },
     /// Watch a package registry and emit typosquat findings as JSON lines
     Watch {
@@ -269,6 +276,7 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Command::Explain { id } => run_explain(&id, cli.format),
         Command::Watch {
             registry,
             min_confidence,
@@ -494,6 +502,101 @@ fn scan(path: &Path, offline: bool, quiet: bool) -> Result<Scanned, String> {
             .map(Scanned::File)
             .map_err(|err| err.to_string())
     }
+}
+
+/// Fetches one advisory from OSV and prints its details.
+fn run_explain(id: &str, format: Format) -> ExitCode {
+    let client = deprader::osv::OsvClient::new();
+    let vuln = match client.fetch_vuln(id) {
+        Ok(vuln) => vuln,
+        Err(err) => {
+            let message = err.to_string();
+            eprintln!("error: {message}");
+            if format == Format::Json {
+                print_json(&json!({ "error": message }));
+            }
+            return ExitCode::from(2);
+        }
+    };
+
+    match format {
+        Format::Text => print!("{}", explain_text(&vuln)),
+        Format::Json => print_json(&explain_json(&vuln)),
+    }
+    ExitCode::SUCCESS
+}
+
+/// Renders an advisory as human-readable text.
+fn explain_text(vuln: &deprader::osv::Vuln) -> String {
+    use std::fmt::Write;
+
+    let mut out = String::new();
+    let _ = writeln!(out, "{}", vuln.id);
+    if let Some(summary) = &vuln.summary {
+        let _ = writeln!(out, "{summary}");
+    }
+    if let Some(severity) = vuln.severity.first() {
+        let _ = writeln!(out, "Severity: {} ({})", severity.score, severity.kind);
+    }
+    for affected in &vuln.affected {
+        let _ = writeln!(out, "Affected: {}", affected.package.name);
+        for range in &affected.ranges {
+            for event in &range.events {
+                if let Some(introduced) = &event.introduced {
+                    let _ = writeln!(out, "  introduced: {introduced}");
+                }
+                if let Some(fixed) = &event.fixed {
+                    let _ = writeln!(out, "  fixed: {fixed}");
+                }
+            }
+        }
+    }
+    if !vuln.references.is_empty() {
+        let _ = writeln!(out, "References:");
+        for reference in &vuln.references {
+            let _ = writeln!(out, "  {}", reference.url);
+        }
+    }
+    out
+}
+
+/// Renders an advisory as a single JSON document.
+fn explain_json(vuln: &deprader::osv::Vuln) -> Value {
+    json!({
+        "id": vuln.id,
+        "summary": vuln.summary,
+        "severity": vuln
+            .severity
+            .iter()
+            .map(|s| json!({ "type": s.kind, "score": s.score }))
+            .collect::<Vec<_>>(),
+        "affected": vuln
+            .affected
+            .iter()
+            .map(|a| json!({
+                "package": a.package.name,
+                "ranges": a
+                    .ranges
+                    .iter()
+                    .map(|r| json!({
+                        "events": r
+                            .events
+                            .iter()
+                            .map(|e| json!({
+                                "introduced": e.introduced,
+                                "fixed": e.fixed,
+                            }))
+                            .collect::<Vec<_>>(),
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
+            .collect::<Vec<_>>(),
+        "references": vuln
+            .references
+            .iter()
+            .map(|r| json!({ "type": r.kind, "url": r.url }))
+            .collect::<Vec<_>>(),
+    })
 }
 
 /// Runs the watch loop for `registry`, printing each finding as a JSON line to

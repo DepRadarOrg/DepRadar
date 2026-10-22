@@ -35,6 +35,11 @@ pub const MAX_BOUNTY_DURATION_SECS: u64 = 365 * 24 * 60 * 60;
 /// Upper bound on claims per bounty, so one bounty can't be spammed into
 /// unbounded storage.
 pub const MAX_CLAIMS_PER_BOUNTY: u32 = 50;
+/// Upper bound on the number of claims indexed per claimant. The per-claimant
+/// index is a single persistent vector, so this cap keeps it bounded in size;
+/// once a claimant reaches it, further `submit_claim` calls fail with
+/// [`Error::TooManyClaims`].
+pub const MAX_CLAIMS_PER_CLAIMANT: u32 = 200;
 /// Upper bound (in bytes) for `issue_ref` / `proof_ref`.
 pub const MAX_REF_LEN: u32 = 256;
 /// Upper bound (in bytes) for the optional `package` metadata field.
@@ -102,6 +107,9 @@ enum DataKey {
     Bounty(u64),
     Claim(u64, u32),
     ClaimBy(u64, Address),
+    /// Per-claimant index of `(bounty_id, claim_id)` pairs, in submission
+    /// order, capped at [`MAX_CLAIMS_PER_CLAIMANT`].
+    ClaimsOf(Address),
     AllowedToken(Address),
     Reviewer(Address),
     Paused,
@@ -556,6 +564,16 @@ impl DepRaderRouter {
         bounty.pending_claims += 1;
         set_persistent(&env, &key, &bounty);
 
+        // Index the claim under its claimant for profile lookups.
+        let claims_key = DataKey::ClaimsOf(claimant.clone());
+        let mut claims: soroban_sdk::Vec<(u64, u32)> =
+            get_persistent(&env, &claims_key).unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+        if claims.len() >= MAX_CLAIMS_PER_CLAIMANT {
+            return Err(Error::TooManyClaims);
+        }
+        claims.push_back((bounty_id, claim_id));
+        set_persistent(&env, &claims_key, &claims);
+
         env.events()
             .publish((symbol_short!("claimed"), bounty_id), (claim_id, claimant));
         Ok(claim_id)
@@ -573,6 +591,41 @@ impl DepRaderRouter {
         env.storage()
             .persistent()
             .get(&DataKey::ClaimBy(bounty_id, claimant))
+    }
+
+    /// Returns a page of the `(bounty_id, claim_id)` pairs claimed by
+    /// `claimant`, in submission order.
+    ///
+    /// The per-claimant index is capped at [`MAX_CLAIMS_PER_CLAIMANT`]
+    /// entries; once a claimant hits the cap, new claims are rejected with
+    /// [`Error::TooManyClaims`]. Pagination is zero-based: `start` is the
+    /// index of the first entry to return and `limit` is the maximum number
+    /// of entries to return. If `start` is past the end of the index or
+    /// `limit` is zero, an empty vector is returned. The result is the slice
+    /// `[start, min(start + limit, len))`.
+    pub fn get_claims_of(
+        env: Env,
+        claimant: Address,
+        start: u32,
+        limit: u32,
+    ) -> soroban_sdk::Vec<(u64, u32)> {
+        let claims: soroban_sdk::Vec<(u64, u32)> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ClaimsOf(claimant))
+            .unwrap_or_else(|| soroban_sdk::Vec::new(&env));
+
+        let len = claims.len();
+        let mut out = soroban_sdk::Vec::new(&env);
+        if limit == 0 || start >= len {
+            return out;
+        }
+
+        let end = start.saturating_add(limit).min(len);
+        for i in start..end {
+            out.push_back(claims.get(i).unwrap());
+        }
+        out
     }
 
     /// Allows a claimant to withdraw their own pending claim.

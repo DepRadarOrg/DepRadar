@@ -426,6 +426,109 @@ fn test_submit_claim_is_capped_per_bounty() {
     );
 }
 
+// ------------------------------------------------------- claims_of index
+
+#[test]
+fn test_claims_of_indexes_across_bounties() {
+    let t = setup();
+    let claimant = Address::generate(&t.env);
+
+    let mut expected = soroban_sdk::Vec::new(&t.env);
+    for i in 0..3u64 {
+        let bounty_id = t.create();
+        let claim_id = t
+            .client
+            .submit_claim(&bounty_id, &claimant, &t.s("org/repo#123-pr-456"));
+        expected.push_back((bounty_id, claim_id));
+        // Interleave another claimant so the index is per-claimant.
+        let other = Address::generate(&t.env);
+        t.client
+            .submit_claim(&bounty_id, &other, &t.s("org/repo#123-pr-789"));
+        assert_eq!(i, bounty_id - 1);
+    }
+
+    let claims = t.client.get_claims_of(&claimant, &0, &10);
+    assert_eq!(claims, expected);
+
+    // A claimant with no claims gets an empty vec.
+    let stranger = Address::generate(&t.env);
+    assert_eq!(t.client.get_claims_of(&stranger, &0, &10).len(), 0);
+}
+
+#[test]
+fn test_claims_of_pagination() {
+    let t = setup();
+    let claimant = Address::generate(&t.env);
+
+    let mut expected = soroban_sdk::Vec::new(&t.env);
+    for _ in 0..5u64 {
+        let bounty_id = t.create();
+        let claim_id = t
+            .client
+            .submit_claim(&bounty_id, &claimant, &t.s("org/repo#123-pr-456"));
+        expected.push_back((bounty_id, claim_id));
+    }
+
+    // Slice in the middle.
+    let page = t.client.get_claims_of(&claimant, &1, &2);
+    assert_eq!(page.len(), 2);
+    assert_eq!(page.get(0).unwrap(), expected.get(1).unwrap());
+    assert_eq!(page.get(1).unwrap(), expected.get(2).unwrap());
+
+    // Limit larger than the remainder clamps to what's left.
+    let tail = t.client.get_claims_of(&claimant, &3, &10);
+    assert_eq!(tail.len(), 2);
+    assert_eq!(tail.get(0).unwrap(), expected.get(3).unwrap());
+    assert_eq!(tail.get(1).unwrap(), expected.get(4).unwrap());
+
+    // Out-of-range start yields an empty vec.
+    assert_eq!(t.client.get_claims_of(&claimant, &5, &10).len(), 0);
+    assert_eq!(t.client.get_claims_of(&claimant, &100, &10).len(), 0);
+
+    // Zero limit yields an empty vec.
+    assert_eq!(t.client.get_claims_of(&claimant, &0, &0).len(), 0);
+}
+
+#[test]
+fn test_claims_of_is_capped_per_claimant() {
+    let t = setup();
+    let claimant = Address::generate(&t.env);
+
+    // Spread the claims across several bounties so the per-bounty cap is
+    // never the limiting factor.
+    let mut bounties = soroban_sdk::Vec::new(&t.env);
+    while (bounties.len() as u32) * MAX_CLAIMS_PER_BOUNTY < MAX_CLAIMS_PER_CLAIMANT {
+        bounties.push_back(t.create());
+    }
+
+    let mut submitted = 0u32;
+    'outer: for bounty_id in bounties.iter() {
+        for _ in 0..MAX_CLAIMS_PER_BOUNTY {
+            if submitted == MAX_CLAIMS_PER_CLAIMANT {
+                break 'outer;
+            }
+            t.client
+                .submit_claim(&bounty_id, &claimant, &t.s("org/repo#123-pr-456"));
+            submitted += 1;
+        }
+    }
+    assert_eq!(submitted, MAX_CLAIMS_PER_CLAIMANT);
+    assert_eq!(
+        t.client
+            .get_claims_of(&claimant, &0, &MAX_CLAIMS_PER_CLAIMANT)
+            .len(),
+        MAX_CLAIMS_PER_CLAIMANT
+    );
+
+    // One more claim on a fresh bounty is rejected by the claimant cap.
+    let extra_bounty = t.create();
+    assert_eq!(
+        t.client
+            .try_submit_claim(&extra_bounty, &claimant, &t.s("org/repo#123-pr-456")),
+        Err(Ok(Error::TooManyClaims))
+    );
+}
+
 // ------------------------------------------------------ reject / release
 
 #[test]
