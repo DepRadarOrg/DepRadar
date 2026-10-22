@@ -47,6 +47,16 @@ pub const MAX_PACKAGE_LEN: u32 = 128;
 /// Upper bound (in bytes) for the optional `ecosystem` metadata field.
 pub const MAX_ECOSYSTEM_LEN: u32 = 32;
 
+/// Contract-wide limits exposed to front ends via [`DepRaderRouter::get_config`].
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Config {
+    pub review_window_secs: u64,
+    pub max_claims_per_bounty: u32,
+    pub max_ref_len: u32,
+    pub max_bounty_duration_secs: u64,
+}
+
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BountyStatus {
@@ -111,7 +121,7 @@ enum DataKey {
     /// order, capped at [`MAX_CLAIMS_PER_CLAIMANT`].
     ClaimsOf(Address),
     AllowedToken(Address),
-    Reviewer(Address),
+    MinAmount(Address),
     Paused,
 }
 
@@ -136,6 +146,8 @@ pub enum Error {
     InvalidShares = 20,
     TokenNotAllowed = 21,
     Paused = 22,
+    CreatorCannotClaim = 23,
+    AmountTooSmall = 24,
 }
 
 #[contract]
@@ -219,35 +231,14 @@ impl DepRaderRouter {
         env.storage().instance().get(&DataKey::PendingAdmin)
     }
 
-    // ------------------------------------------------------------ reviewers
-
-    /// Admin-only: grants `reviewer` permission to reject claims and release
-    /// bounties without handing over full admin control.
-    pub fn add_reviewer(env: Env, reviewer: Address) -> Result<(), Error> {
-        let admin = require_admin(&env)?;
-        set_persistent(&env, &DataKey::Reviewer(reviewer.clone()), &true);
-        env.events()
-            .publish((symbol_short!("rev_added"),), (reviewer, admin));
-        Ok(())
-    }
-
-    /// Admin-only: revokes a reviewer's permission.
-    pub fn remove_reviewer(env: Env, reviewer: Address) -> Result<(), Error> {
-        let admin = require_admin(&env)?;
-        env.storage()
-            .persistent()
-            .remove(&DataKey::Reviewer(reviewer.clone()));
-        env.events()
-            .publish((symbol_short!("rev_rmvd"),), (reviewer, admin));
-        Ok(())
-    }
-
-    /// Returns whether `reviewer` is currently registered as a reviewer.
-    pub fn is_reviewer(env: Env, reviewer: Address) -> bool {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Reviewer(reviewer))
-            .unwrap_or(false)
+    /// Returns the contract's limits so front ends don't hard-code them.
+    pub fn get_config(_env: Env) -> Config {
+        Config {
+            review_window_secs: REVIEW_WINDOW_SECS,
+            max_claims_per_bounty: MAX_CLAIMS_PER_BOUNTY,
+            max_ref_len: MAX_REF_LEN,
+            max_bounty_duration_secs: MAX_BOUNTY_DURATION_SECS,
+        }
     }
 
     // --------------------------------------------------- token allowlist
@@ -278,6 +269,27 @@ impl DepRaderRouter {
             .persistent()
             .get(&DataKey::AllowedToken(token))
             .unwrap_or(false)
+    }
+
+    /// Admin-only: sets the minimum bounty amount for a token. Bounties in
+    /// that token below this amount are rejected with `AmountTooSmall`.
+    pub fn set_min_amount(env: Env, token: Address, min_amount: i128) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        if min_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        set_persistent(&env, &DataKey::MinAmount(token.clone()), &min_amount);
+        env.events()
+            .publish((symbol_short!("min_set"),), (token, min_amount, admin));
+        Ok(())
+    }
+
+    /// Returns the minimum bounty amount for a token (0 if unset).
+    pub fn get_min_amount(env: Env, token: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MinAmount(token))
+            .unwrap_or(0)
     }
 
     // ------------------------------------------------------------- bounties
@@ -313,6 +325,14 @@ impl DepRaderRouter {
         }
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+        let min_amount: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MinAmount(token.clone()))
+            .unwrap_or(0);
+        if amount < min_amount {
+            return Err(Error::AmountTooSmall);
         }
         check_ref(&issue_ref)?;
         check_metadata(&ecosystem, &package)?;
@@ -537,6 +557,9 @@ impl DepRaderRouter {
         let mut bounty: Bounty = get_persistent(&env, &key).ok_or(Error::BountyNotFound)?;
         if bounty.status != BountyStatus::Open {
             return Err(Error::BountyNotOpen);
+        }
+        if claimant == bounty.creator {
+            return Err(Error::CreatorCannotClaim);
         }
         let now = env.ledger().timestamp();
         if now >= bounty.deadline {

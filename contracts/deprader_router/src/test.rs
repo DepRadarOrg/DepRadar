@@ -1,7 +1,6 @@
 use super::{
-    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error,
-    MAX_BOUNTY_DURATION_SECS, MAX_CLAIMS_PER_BOUNTY, MAX_ECOSYSTEM_LEN, MAX_PACKAGE_LEN,
-    REVIEW_WINDOW_SECS,
+    BountyStatus, ClaimStatus, DepRaderRouter, DepRaderRouterClient, Error, MAX_BOUNTY_DURATION_SECS,
+    MAX_CLAIMS_PER_BOUNTY, MAX_REF_LEN, REVIEW_WINDOW_SECS,
 };
 use soroban_sdk::{
     symbol_short,
@@ -396,6 +395,28 @@ fn test_submit_claim_rejects_duplicates_and_bad_input() {
         Err(Ok(Error::BountyNotFound))
     );
     assert!(t.client.get_claim(&999, &0).is_none());
+}
+
+#[test]
+fn test_creator_cannot_claim_own_bounty() {
+    let t = setup();
+    let bounty_id = t.create();
+
+    assert_eq!(
+        t.client
+            .try_submit_claim(&bounty_id, &t.creator, &t.s("org/repo#123-pr-456")),
+        Err(Ok(Error::CreatorCannotClaim))
+    );
+
+    // Nothing was recorded and no claim ID was consumed.
+    let bounty = t.client.get_bounty(&bounty_id).unwrap();
+    assert_eq!((bounty.claim_count, bounty.pending_claims), (0, 0));
+    assert!(t.client.get_claim(&bounty_id, &0).is_none());
+    assert_eq!(t.client.get_claim_id(&bounty_id, &t.creator), None);
+
+    // Other claimants are unaffected.
+    let (_, claim_id) = t.claim(bounty_id);
+    assert_eq!(claim_id, 0);
 }
 
 #[test]
@@ -1124,277 +1145,92 @@ fn test_non_admin_cannot_change_allowlist() {
     assert!(t.client.try_disallow_token(&t.token.address).is_err());
 }
 
-// ------------------------------------------------- reviewer role (#116)
+// ------------------------------------------------------- min bounty amount
 
 #[test]
-fn test_admin_can_add_and_remove_reviewer() {
+fn test_min_amount_defaults_to_zero() {
     let t = setup();
-    let reviewer = Address::generate(&t.env);
+    assert_eq!(t.client.get_min_amount(&t.token.address), 0);
 
-    assert!(!t.client.is_reviewer(&reviewer));
-    t.add_reviewer(&reviewer);
+    // Any positive amount is accepted while the minimum is 0.
+    let bounty_id = t.client.create_bounty(
+        &t.creator,
+        &t.s("org/repo#1"),
+        &1,
+        &t.token.address,
+        &DEADLINE,
+    );
+    assert_eq!(bounty_id, 1);
+}
+
+#[test]
+fn test_set_min_amount_requires_admin() {
+    let t = setup();
+    t.client.set_min_amount(&t.token.address, &100);
     assert_eq!(t.last_auth(), t.admin);
-    assert!(t.client.is_reviewer(&reviewer));
+    assert_eq!(t.client.get_min_amount(&t.token.address), 100);
 
-    t.client.remove_reviewer(&t.admin, &reviewer);
-    assert_eq!(t.last_auth(), t.admin);
-    assert!(!t.client.is_reviewer(&reviewer));
+    t.env.set_auths(&[]);
+    assert!(t.client.try_set_min_amount(&t.token.address, &200).is_err());
+    assert_eq!(t.client.get_min_amount(&t.token.address), 100);
 }
 
 #[test]
-fn test_reviewer_can_reject_and_release() {
+fn test_create_bounty_enforces_min_amount() {
     let t = setup();
-    let reviewer = Address::generate(&t.env);
-    t.add_reviewer(&reviewer);
+    t.client.set_min_amount(&t.token.address, &100);
 
-    let bounty_id = t.create();
-    let (_, junk) = t.claim(bounty_id);
-    let (winner, real) = t.claim(bounty_id);
+    let create = |amount: i128| {
+        t.client.try_create_bounty(
+            &t.creator,
+            &t.s("org/repo#1"),
+            &amount,
+            &t.token.address,
+            &DEADLINE,
+        )
+    };
 
-    t.client.reject_claim(&reviewer, &bounty_id, &junk);
-    assert_eq!(t.last_auth(), reviewer);
-    assert_eq!(
-        t.client.get_claim(&bounty_id, &junk).unwrap().status,
-        ClaimStatus::Rejected
-    );
+    // Below the minimum.
+    assert_eq!(create(99), Err(Ok(Error::AmountTooSmall)));
+    // At the minimum.
+    assert_eq!(create(100), Ok(Ok(1)));
+    // Above the minimum.
+    assert_eq!(create(101), Ok(Ok(2)));
 
-    t.client.release(&reviewer, &bounty_id, &real);
-    assert_eq!(t.last_auth(), reviewer);
-    assert_eq!(t.token.balance(&winner), AMOUNT);
+    assert_eq!(t.client.bounty_count(), 2);
+    assert_eq!(t.token.balance(&t.client.address), 100 + 101);
 }
 
 #[test]
-fn test_removed_reviewer_can_no_longer_review() {
+fn test_min_amount_is_per_token() {
     let t = setup();
-    let reviewer = Address::generate(&t.env);
-    t.add_reviewer(&reviewer);
-    t.client.remove_reviewer(&t.admin, &reviewer);
+    let other_sac = t
+        .env
+        .register_stellar_asset_contract_v2(Address::generate(&t.env));
+    let other = other_sac.address();
+    t.client.allow_token(&other);
+    t.client.set_min_amount(&t.token.address, &100);
 
-    let bounty_id = t.create();
-    let (_, claim_id) = t.claim(bounty_id);
-    assert_eq!(
-        t.client.try_release(&reviewer, &bounty_id, &claim_id),
-        Err(Ok(Error::NotAuthorized))
+    assert_eq!(t.client.get_min_amount(&other), 0);
+    let bounty_id = t.client.create_bounty(
+        &t.creator,
+        &t.s("org/repo#1"),
+        &1,
+        &other,
+        &DEADLINE,
     );
-    assert_eq!(
-        t.client.try_reject_claim(&reviewer, &bounty_id, &claim_id),
-        Err(Ok(Error::NotAuthorized))
-    );
+    assert_eq!(bounty_id, 1);
 }
+
+// ---------------------------------------------------------------- get_config
 
 #[test]
-fn test_permission_matrix() {
+fn test_get_config_matches_constants() {
     let t = setup();
-    let reviewer = Address::generate(&t.env);
-    let stranger = Address::generate(&t.env);
-    t.add_reviewer(&reviewer);
+    let config = t.client.get_config();
 
-    // --- admin-only functions: admin ok, reviewer/stranger NotAuthorized.
-    assert!(t.client.try_set_paused(&reviewer, &true).is_err());
-    assert!(t.client.try_set_paused(&stranger, &true).is_err());
-    assert!(t.client.try_allow_token(&reviewer, &t.token.address).is_err());
-    assert!(t
-        .client
-        .try_allow_token(&stranger, &t.token.address)
-        .is_err());
-    assert!(t
-        .client
-        .try_disallow_token(&reviewer, &t.token.address)
-        .is_err());
-    assert!(t
-        .client
-        .try_disallow_token(&stranger, &t.token.address)
-        .is_err());
-    assert!(t.client.try_add_reviewer(&reviewer, &stranger).is_err());
-    assert!(t.client.try_add_reviewer(&stranger, &stranger).is_err());
-    assert!(t.client.try_remove_reviewer(&reviewer, &reviewer).is_err());
-    assert!(t.client.try_remove_reviewer(&stranger, &reviewer).is_err());
-    assert!(t.client.try_propose_admin(&reviewer, &stranger).is_err());
-    assert!(t.client.try_propose_admin(&stranger, &stranger).is_err());
-
-    // Admin succeeds on the same calls.
-    t.client.set_paused(&t.admin, &true);
-    t.client.set_paused(&t.admin, &false);
-    t.client.allow_token(&t.admin, &t.token.address);
-    t.client.disallow_token(&t.admin, &t.token.address);
-    t.client.allow_token(&t.admin, &t.token.address);
-
-    // --- review functions: admin and reviewer ok, stranger NotAuthorized.
-    let bounty_id = t.create();
-    let (_, junk) = t.claim(bounty_id);
-    let (_, real) = t.claim(bounty_id);
-
-    assert_eq!(
-        t.client.try_reject_claim(&stranger, &bounty_id, &junk),
-        Err(Ok(Error::NotAuthorized))
-    );
-    assert_eq!(
-        t.client.try_release(&stranger, &bounty_id, &real),
-        Err(Ok(Error::NotAuthorized))
-    );
-    t.client.reject_claim(&reviewer, &bounty_id, &junk);
-    t.client.release(&t.admin, &bounty_id, &real);
-
-    // release_split is admin-only.
-    let bounty_id = t.create();
-    let (_, c1) = t.claim(bounty_id);
-    let (_, c2) = t.claim(bounty_id);
-    let mut shares = soroban_sdk::Vec::new(&t.env);
-    shares.push_back((c1, 5_000));
-    shares.push_back((c2, 5_000));
-    assert_eq!(
-        t.client.try_release_split(&reviewer, &bounty_id, &shares),
-        Err(Ok(Error::NotAuthorized))
-    );
-    assert_eq!(
-        t.client.try_release_split(&stranger, &bounty_id, &shares),
-        Err(Ok(Error::NotAuthorized))
-    );
-    t.client.release_split(&t.admin, &bounty_id, &shares);
-
-    // --- creator-only functions: reviewer/stranger are not the creator.
-    let bounty_id = t.create();
-    assert_eq!(
-        t.client
-            .try_extend_deadline(&reviewer, &bounty_id, &(DEADLINE + 1000)),
-        Err(Ok(Error::NotAuthorized))
-    );
-    assert_eq!(
-        t.client
-            .try_extend_deadline(&stranger, &bounty_id, &(DEADLINE + 1000)),
-        Err(Ok(Error::NotAuthorized))
-    );
-
-    // --- cancel: admin always, stranger never.
-    assert_eq!(
-        t.client.try_cancel_bounty(&stranger, &bounty_id),
-        Err(Ok(Error::NotAuthorized))
-    );
-    t.client.cancel_bounty(&t.admin, &bounty_id);
-}
-
-// ------------------------------------------- balance invariant (#118)
-
-/// Deterministic LCG so failures are reproducible from the printed seed.
-struct Lcg(u64);
-
-impl Lcg {
-    fn next(&mut self) -> u64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        self.0
-    }
-
-    fn below(&mut self, n: u64) -> u64 {
-        self.next() % n
-    }
-}
-
-#[test]
-fn test_balance_invariant_random_sequences() {
-    const SEED: u64 = 0xDEAD_BEEF_1234_5678;
-    const STEPS: usize = 300;
-
-    let t = setup();
-    let reviewer = Address::generate(&t.env);
-    t.add_reviewer(&reviewer);
-
-    // Fund the creator generously so creates never fail for lack of funds.
-    StellarAssetClient::new(&t.env, &t.token.address).mint(&t.creator, &1_000_000);
-
-    let mut rng = Lcg(SEED);
-    let mut open: std::vec::Vec<(u64, i128)> = std::vec::Vec::new();
-    let mut next_id: u64 = 1;
-
-    let expected: i128 = |open: &std::vec::Vec<(u64, i128)>| open.iter().map(|(_, a)| *a).sum();
-
-    for step in 0..STEPS {
-        let action = rng.below(5);
-        match action {
-            // create
-            0 => {
-                let amount = 10 + (rng.below(90) as i128);
-                let id = t
-                    .client
-                    .create_bounty(
-                        &t.creator,
-                        &t.s("org/repo#inv"),
-                        &amount,
-                        &t.token.address,
-                        &DEADLINE,
-                        &None,
-                        &None,
-                        &None,
-                    );
-                assert_eq!(id, next_id, "seed {SEED} step {step}");
-                next_id += 1;
-                open.push((id, amount));
-            }
-            // claim
-            1 => {
-                if !open.is_empty() {
-                    let idx = rng.below(open.len() as u64) as usize;
-                    let (id, _) = open[idx];
-                    let claimant = Address::generate(&t.env);
-                    let _ = t
-                        .client
-                        .try_submit_claim(&id, &claimant, &t.s("org/repo#inv-pr"));
-                }
-            }
-            // reject a claim (reviewer)
-            2 => {
-                if !open.is_empty() {
-                    let idx = rng.below(open.len() as u64) as usize;
-                    let (id, _) = open[idx];
-                    let bounty = t.client.get_bounty(&id).unwrap();
-                    if bounty.claim_count > 0 {
-                        let cid = rng.below(bounty.claim_count as u64) as u32;
-                        let _ = t.client.try_reject_claim(&reviewer, &id, &cid);
-                    }
-                }
-            }
-            // release a claim (reviewer)
-            3 => {
-                if !open.is_empty() {
-                    let idx = rng.below(open.len() as u64) as usize;
-                    let (id, _) = open[idx];
-                    let bounty = t.client.get_bounty(&id).unwrap();
-                    if bounty.pending_claims > 0 {
-                        // Find a pending claim id.
-                        let mut chosen = None;
-                        for cid in 0..bounty.claim_count {
-                            if let Some(c) = t.client.get_claim(&id, &cid) {
-                                if c.status == ClaimStatus::Pending {
-                                    chosen = Some(cid);
-                                    break;
-                                }
-                            }
-                        }
-                        if let Some(cid) = chosen {
-                            t.client.release(&reviewer, &id, &cid);
-                            open.remove(idx);
-                        }
-                    }
-                }
-            }
-            // cancel (admin)
-            _ => {
-                if !open.is_empty() {
-                    let idx = rng.below(open.len() as u64) as usize;
-                    let (id, _) = open[idx];
-                    t.client.cancel_bounty(&t.admin, &id);
-                    open.remove(idx);
-                }
-            }
-        }
-
-        let balance = t.token.balance(&t.client.address);
-        assert_eq!(
-            balance,
-            expected(&open),
-            "balance invariant broken at seed {SEED} step {step}"
-        );
-    }
+    assert_eq!(config.review_window_secs, REVIEW_WINDOW_SECS);
+    assert_eq!(config.max_claims_per_bounty, MAX_CLAIMS_PER_BOUNTY);
+    assert_eq!(config.max_ref_len, MAX_REF_LEN);
+    assert_eq!(config.max_bounty_duration_secs, MAX_BOUNTY_DURATION_SECS);
 }

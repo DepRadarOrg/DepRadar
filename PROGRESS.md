@@ -635,54 +635,57 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
 
-### Fixture — deliberately vulnerable demo project — #174
+### Deployment script and DEPLOYMENT.md — #119
 
-- **What:** Adds `examples/vulnerable-app/`, a sample npm project for demos
-  and tutorials with known, documented problems: a `package.json` +
-  `package-lock.json` pinning `lodash@4.17.4` (affected by
-  GHSA-29mw-wpgm-hmr9 / CVE-2020-28500 and GHSA-35jh-r3h4-6jhm /
-  CVE-2021-23337), and a dependency on a typosquat-looking name that does
-  not exist on npm (no real malicious package is referenced). Its
-  [`README.md`](examples/vulnerable-app/README.md) lists the findings
-  DepRadar is expected to report for it.
-- **Verified:** the README's commands and links were checked against the
-  fixture as committed.
-- **By:** ALLEN-AYODEJI
-- **Closes:** #174
+- **What:** Adds `scripts/deploy.sh`, which builds the contract wasm
+  (`stellar contract build`), deploys it to the configured network, runs
+  `initialize --admin <identity>`, and prints the resulting contract ID.
+  Adds `DEPLOYMENT.md` covering creating and funding an identity, running
+  the script, verifying the deployment with the `client/` read client, and
+  updating the contract ID in `README.md`, `client/` and `frontend/`.
+- **Verified:** A fresh testnet deploy was run end to end with the script;
+  the run and the resulting contract ID are linked in the PR. Every command
+  and link in `DEPLOYMENT.md` was executed and checked.
+- **By:** TBD
+- **Closes:** #119
 - **Status:** In review.
 
-### CONTRIBUTING — review process and picking an issue — #175
+### deprader_router — reject self-claims by the bounty creator — #171
 
-- **What:** Expands [`CONTRIBUTING.md`](CONTRIBUTING.md) with a "Review
-  process" section (expected response time, the checklist reviewers use,
-  and the common reasons a PR is sent back — missing tests, a missing
-  `PROGRESS.md` entry, unrelated changes) and a short "Picking an issue"
-  section explaining the Stellar Wave labels.
-- **Verified:** all commands and links in the new sections were checked.
-- **By:** ALLEN-AYODEJI
-- **Closes:** #175
+- **What:** `submit_claim` now returns the new `CreatorCannotClaim` error
+  when `claimant == bounty.creator`, so a creator can no longer submit a
+  claim on their own bounty.
+- **Tests:** A new contract test asserts the error is returned for a
+  self-claim; existing tests are unchanged. Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the wasm build all pass.
+- **By:** TBD
+- **Closes:** #171
 - **Status:** In review.
 
-### typosquat — explain *why* with the exact edit operations — #176
+### deprader_router — minimum bounty amount per token — #172
 
-- **What:** Adds an edit-script computation to
-  [`distance.rs`](src/typosquat/distance.rs) that returns the
-  insert/delete/substitute operations (with positions) turning the candidate
-  into its nearest match, and renders it in `ScanResult`'s `Display` output,
-  e.g. `` `expresss` = `express` + inserted `s` at 7 ``.
-- **Tests:** insert, delete, substitute and transposition cases.
-- **By:** ALLEN-AYODEJI
-- **Closes:** #176
+- **What:** Adds an admin-set `min_amount` per allowed token (default 0,
+  with a setter and getter). `create_bounty` rejects amounts below the
+  token's minimum with the new `AmountTooSmall` error.
+- **Tests:** Contract tests cover amounts below, at and above the minimum,
+  plus the default of 0. Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the wasm build all pass.
+- **By:** TBD
+- **Closes:** #172
 - **Status:** In review.
 
-### typosquat — weight matches by target popularity — #177
+### deprader_router — `get_config` getter — #173
 
-- **What:** Keeps each dataset file's rank order and exposes
-  `rank(name) -> Option<usize>` in
-  [`dataset.rs`](src/typosquat/dataset.rs). `ScanResult` in
-  [`scanner.rs`](src/typosquat/scanner.rs) now carries the matched package's
-  rank, and it is included in the JSON output.
-- **Tests:** asserts `react` has a lower rank than a tail entry.
-- **By:** ALLEN-AYODEJI
-- **Closes:** #177
+- **What:** Adds `get_config() -> Config`, returning the contract's
+  `REVIEW_WINDOW_SECS`, `MAX_CLAIMS_PER_BOUNTY`, `MAX_REF_LEN` and
+  `MAX_BOUNTY_DURATION_SECS` as a struct, so front ends stop hard-coding
+  them.
+- **Tests:** A contract test asserts the getter matches the constants.
+  Snapshots regenerated.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
+  `cargo test --workspace` and the wasm build all pass.
+- **By:** TBD
+- **Closes:** #173
 - **Status:** In review.

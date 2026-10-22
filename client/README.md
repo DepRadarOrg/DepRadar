@@ -22,3 +22,10 @@ Bounty `1` is real on-chain data: the `create_bounty` -> `submit_claim`
 claim. Bounty `2` was cancelled and refunded. An unknown ID prints
 `(no bounty with this ID)` rather than erroring, since `get_bounty` returns
 `None` for unknown IDs on-chain.
+
+## Verifying a fresh deploy
+
+After deploying a new contract with [`scripts/deploy.sh`](../scripts/deploy.sh),
+update the contract ID above and use this client to confirm the deploy works.
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for the full procedure, including how to
+verify a fresh deploy with the client.
