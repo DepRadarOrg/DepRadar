@@ -109,6 +109,11 @@ The SHA-256 values must match. Extract the archive and place `depradar` (or
 `depradar.exe`) on your `PATH`. The release does not require a Rust toolchain.
 Builds report their version and source commit with `depradar --version`.
 
+Every release also carries CycloneDX software bills of materials:
+`depradar-rust.cdx.json` (the CLI crate), `deprader-router-rust.cdx.json`
+(the bounty router contract) and `depradar-frontend.cdx.json` (the
+dashboard's production npm dependencies).
+
 ### Project config file (`depradar.toml`)
 
 Teams that run the same flags on every CI run can put them in a
