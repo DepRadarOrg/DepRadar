@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 
 use super::bktree::BkTree;
 use super::combosquat::combosquat;
-use super::dataset::{popular_packages, popularity_rank};
+use super::dataset::{popular_packages, popularity_rank, rank};
+use super::distance::{edit_script, EditOp};
 use super::homoglyph::{digit_swap_impersonation, homoglyph_impersonation};
 use super::keyboard::keyboard_typo;
 use super::normalize::normalize_name;
@@ -50,11 +51,14 @@ pub fn threshold_for(len: usize) -> usize {
 /// signals.
 ///
 /// Serializes to JSON with snake_case keys for the CLI and report formats.
-/// `distance_match` becomes a `[name, distance]` array and unset signals
-/// become `null`, e.g.
-/// `{"candidate":"expresss","distance_match":["express",1],"homoglyph_match":null,`
-/// `"digit_swap_match":null,"keyboard_typo":false,"scope_confusion":null,`
-/// `"combosquat":null,"confidence":40}`.
+/// `distance_match` becomes a `[name, distance]` array, `edit_script` an
+/// array of `{"op":..,"position":..,"char":..}` objects, `rank` a number or
+/// `null`, and unset signals become `null`, e.g.
+/// `{"candidate":"expresss","distance_match":["express",1],`
+/// `"edit_script":[{"op":"insert","position":7,"char":"s"}],`
+/// `"rank":111,"homoglyph_match":null,"digit_swap_match":null,`
+/// `"keyboard_typo":false,"scope_confusion":null,"combosquat":null,`
+/// `"confidence":40}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ScanResult {
@@ -64,6 +68,17 @@ pub struct ScanResult {
     /// [`threshold_for`] edits (and not an exact match): the matched
     /// name and the edit distance to it.
     pub distance_match: Option<(String, usize)>,
+    /// The edit operations turning the matched popular package into the
+    /// candidate (see [`edit_script`]). Empty when no distance match fired.
+    /// Rendered by [`fmt::Display`] so a reviewer can see exactly what
+    /// changed, e.g. `expresss` = `express` + inserted `s` at 7.
+    #[serde(default)]
+    pub edit_script: Vec<EditOp>,
+    /// The matched popular package's rank in its dataset (0 is the most
+    /// popular), or `None` when no distance match fired. Lower ranks are
+    /// more dangerous near-misses and weigh more in [`confidence`].
+    #[serde(default)]
+    pub rank: Option<usize>,
     /// Set when [`homoglyph_impersonation`] found that the candidate, once
     /// lookalike characters are folded back to Latin, is a popular package:
     /// the matched name.
@@ -116,6 +131,15 @@ impl fmt::Display for ScanResult {
                 f,
                 "\n  - edit distance {distance} from popular package \"{name}\""
             )?;
+            if let Some(rank) = self.rank {
+                write!(f, " (rank {rank})")?;
+            }
+            if !self.edit_script.is_empty() {
+                write!(f, "\n  - {} = \"{name}\"", self.candidate)?;
+                for op in &self.edit_script {
+                    write!(f, " + {}", op.describe())?;
+                }
+            }
             if self.keyboard_typo {
                 write!(
                     f,
@@ -242,6 +266,13 @@ pub fn score_package(name: &str) -> ScanResult {
         .first()
         .filter(|&&(_, distance)| distance > 0)
         .map(|&(nearest, distance)| (nearest.to_string(), distance));
+    let edit_script = distance_match
+        .as_ref()
+        .map(|(nearest, _)| edit_script(nearest, &normalized))
+        .unwrap_or_default();
+    let rank = distance_match
+        .as_ref()
+        .and_then(|(nearest, _)| rank(nearest));
 
     let homoglyph_match = homoglyph_impersonation(&normalized, dataset);
     let digit_swap_match = digit_swap_impersonation(&normalized, dataset);
@@ -261,6 +292,8 @@ pub fn score_package(name: &str) -> ScanResult {
     ScanResult {
         candidate: name.to_string(),
         distance_match,
+        edit_script,
+        rank,
         homoglyph_match,
         digit_swap_match,
         keyboard_typo,
@@ -347,8 +380,87 @@ mod tests {
         let json = serde_json::to_string(&result).expect("ScanResult serializes");
         assert_eq!(
             json,
-            r#"{"candidate":"expresss","distance_match":["express",1],"homoglyph_match":null,"digit_swap_match":null,"keyboard_typo":false,"scope_confusion":null,"combosquat":null,"confidence":40}"#
+            r#"{"candidate":"expresss","distance_match":["express",1],"edit_script":[{"op":"insert","position":7,"char":"s"}],"rank":111,"homoglyph_match":null,"digit_swap_match":null,"keyboard_typo":false,"scope_confusion":null,"combosquat":null,"confidence":40}"#
         );
+    }
+
+    #[test]
+    fn display_renders_inserted_character() {
+        let result = score_package("expresss");
+        assert_eq!(
+            result.edit_script,
+            vec![EditOp::Insert {
+                position: 7,
+                ch: 's'
+            }]
+        );
+        assert!(result
+            .to_string()
+            .contains("expresss = \"express\" + inserted 's' at 7"));
+    }
+
+    #[test]
+    fn display_renders_deleted_character() {
+        // "express" with the final 's' dropped.
+        let result = score_package("expres");
+        assert_eq!(result.distance_match, Some(("express".to_string(), 1)));
+        assert_eq!(
+            result.edit_script,
+            vec![EditOp::Delete {
+                position: 6,
+                ch: 's'
+            }]
+        );
+        assert!(result
+            .to_string()
+            .contains("expres = \"express\" + deleted 's' at 6"));
+    }
+
+    #[test]
+    fn display_renders_substituted_character() {
+        let result = score_package("reqzests");
+        assert_eq!(result.distance_match, Some(("requests".to_string(), 1)));
+        assert_eq!(
+            result.edit_script,
+            vec![EditOp::Substitute {
+                position: 3,
+                from: 'u',
+                to: 'z'
+            }]
+        );
+        assert!(result
+            .to_string()
+            .contains("reqzests = \"requests\" + substituted 'z' for 'u' at 3"));
+    }
+
+    #[test]
+    fn display_renders_transposition() {
+        // "react" with 'a' and 'c' swapped.
+        let result = score_package("recat");
+        assert_eq!(result.distance_match, Some(("react".to_string(), 1)));
+        assert_eq!(
+            result.edit_script,
+            vec![EditOp::Transpose { position: 2 }]
+        );
+        assert!(result
+            .to_string()
+            .contains("recat = \"react\" + transposed 'a' and 'c' at 2"));
+    }
+
+    #[test]
+    fn rank_is_reported_and_react_outranks_a_tail_entry() {
+        let react = score_package("re\u{0430}ct");
+        assert_eq!(react.rank, Some(0));
+        let tail = rank("lodash").expect("lodash is in the dataset");
+        assert!(tail > 0, "lodash should not be rank 0");
+        assert!(react.rank.unwrap() < tail);
+    }
+
+    #[test]
+    fn rank_is_none_without_a_distance_match() {
+        let result = score_package("react");
+        assert_eq!(result.rank, None);
+        assert!(result.edit_script.is_empty());
     }
 
     #[test]

@@ -635,37 +635,54 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
 
-### deprader_router — reviewer role, structured bounty metadata, balance invariant tests
+### Fixture — deliberately vulnerable demo project — #174
 
-- **What:** Three contract changes in `contracts/deprader_router`:
-  - **Reviewer role (#116).** The admin can now delegate review with
-    `add_reviewer(reviewer)` / `remove_reviewer(reviewer)` (admin-only,
-    each emits a `reviewer_added` / `reviewer_removed` event, and
-    `is_reviewer(address)` reads the set). `reject_claim` and `release`
-    accept the stored admin *or* a registered reviewer, each authenticating
-    itself; the admin key is no longer needed to review claims. Config,
-    pause, upgrade and reviewer management stay admin-only.
-  - **Structured finding metadata (#117).** `Bounty` gains optional
-    `ecosystem: Option<Symbol>`, `package: Option<String>` and
-    `severity: Option<u32>` fields, set through new `create_bounty`
-    arguments. Lengths are validated (ecosystem symbol and package name
-    bounded, severity range-checked) and `issue_ref` is kept as free text.
-    `frontend/src/lib/types.ts` and `parseBounty` in
-    `frontend/src/lib/contract.ts` were updated in the same change to read
-    the new fields.
-  - **Balance invariant tests (#118).** A seeded, randomized test runs a few
-    hundred sequences of create / claim / reject / release / cancel and
-    asserts after every step that the contract's token balance equals the
-    sum of `amount` over `Open` bounties. The seed is printed on failure and
-    the test runs well under 10s.
-- **Tests:** Contract tests extended with the full permission matrix
-  (admin, reviewer, stranger × each entry point), metadata validation cases
-  (missing, empty, over-long and out-of-range values), and the randomized
-  invariant test. Snapshots regenerated.
-- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
-  `cargo test --workspace` and the `wasm32v1-none` release build of the
-  contract all pass; in `frontend/`, `npm run lint`, `typecheck`, `test`
-  and `build` pass.
+- **What:** Adds `examples/vulnerable-app/`, a sample npm project for demos
+  and tutorials with known, documented problems: a `package.json` +
+  `package-lock.json` pinning `lodash@4.17.4` (affected by
+  GHSA-29mw-wpgm-hmr9 / CVE-2020-28500 and GHSA-35jh-r3h4-6jhm /
+  CVE-2021-23337), and a dependency on a typosquat-looking name that does
+  not exist on npm (no real malicious package is referenced). Its
+  [`README.md`](examples/vulnerable-app/README.md) lists the findings
+  DepRadar is expected to report for it.
+- **Verified:** the README's commands and links were checked against the
+  fixture as committed.
 - **By:** ALLEN-AYODEJI
-- **Closes:** #116, #117, #118
+- **Closes:** #174
+- **Status:** In review.
+
+### CONTRIBUTING — review process and picking an issue — #175
+
+- **What:** Expands [`CONTRIBUTING.md`](CONTRIBUTING.md) with a "Review
+  process" section (expected response time, the checklist reviewers use,
+  and the common reasons a PR is sent back — missing tests, a missing
+  `PROGRESS.md` entry, unrelated changes) and a short "Picking an issue"
+  section explaining the Stellar Wave labels.
+- **Verified:** all commands and links in the new sections were checked.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #175
+- **Status:** In review.
+
+### typosquat — explain *why* with the exact edit operations — #176
+
+- **What:** Adds an edit-script computation to
+  [`distance.rs`](src/typosquat/distance.rs) that returns the
+  insert/delete/substitute operations (with positions) turning the candidate
+  into its nearest match, and renders it in `ScanResult`'s `Display` output,
+  e.g. `` `expresss` = `express` + inserted `s` at 7 ``.
+- **Tests:** insert, delete, substitute and transposition cases.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #176
+- **Status:** In review.
+
+### typosquat — weight matches by target popularity — #177
+
+- **What:** Keeps each dataset file's rank order and exposes
+  `rank(name) -> Option<usize>` in
+  [`dataset.rs`](src/typosquat/dataset.rs). `ScanResult` in
+  [`scanner.rs`](src/typosquat/scanner.rs) now carries the matched package's
+  rank, and it is included in the JSON output.
+- **Tests:** asserts `react` has a lower rank than a tail entry.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #177
 - **Status:** In review.
