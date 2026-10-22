@@ -620,3 +620,51 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** coderolisa
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
+
+### Web dashboard — empty-state call to action for researchers — #182
+
+- **What:** `frontend/src/pages/BountyList.tsx` no longer stops at "No
+  bounties" when nothing is open. The empty state now explains how bounties
+  work (find a vulnerability, open an issue, get paid on release) and links
+  to the tutorial, `CONTRIBUTING.md` and the repo's GitHub issues so a
+  researcher has a next step.
+- **Verified:** `npm run lint`, `npm run typecheck`, `npm run test` and
+  `npm run build` pass in `frontend/`; a screenshot of the empty state is in
+  the PR.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #182
+- **Status:** In review.
+
+### Read client — `--contract` / `--rpc` flags and env fallbacks — #183
+
+- **What:** `client/src/index.ts` no longer hard-codes the contract ID and
+  RPC URL. Both are configurable via `--contract` / `--rpc` flags, falling
+  back to `DEPRADAR_CONTRACT_ID` / `DEPRADAR_RPC_URL`, then to the previous
+  defaults. `client/README.md` documents the flags, the env vars and the
+  precedence order.
+- **Verified:** `npm run typecheck` passes in `client/`; the client still
+  reads the live testnet contract with the defaults and with each override.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #183
+- **Status:** In review.
+
+### CI — cache-friendly, faster workflow — #184
+
+- **What:** `.github/workflows/ci.yml` now uses `Swatinem/rust-cache` with
+  per-job cache keys, passes `--locked` to every Cargo invocation, and adds
+  a `concurrency` group that cancels superseded PR runs. Before/after job
+  timings are recorded in the PR description.
+- **Verified:** the workflow runs green on the PR.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #184
+- **Status:** In review.
+
+### Docs — issue and PR labels guide — #185
+
+- **What:** Adds a "Labels" section to `CONTRIBUTING.md` listing every label
+  the repo uses — the area labels (`typosquat`, `contract`, `frontend`, …),
+  `good first issue` and `Stellar Wave` — and when each is applied.
+- **Verified:** every command and link in the new section was checked.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #185
+- **Status:** In review.

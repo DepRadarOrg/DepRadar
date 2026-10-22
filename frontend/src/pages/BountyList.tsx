@@ -74,11 +74,30 @@ export function BountyList() {
         {state.status === "error" && <ErrorState error={state.error} onRetry={state.reload} />}
         {state.status === "success" &&
           (shown.length === 0 ? (
-            <Empty>
-              {bounties.length === 0
-                ? "No bounties yet — the radar is quiet."
-                : `No ${filter.label.toLowerCase()} bounties right now.`}
-            </Empty>
+            bounties.length === 0 ? (
+              <Empty>
+                <div className="empty-cta">
+                  <p className="empty-cta-title">No bounties yet — the radar is quiet.</p>
+                  <p>
+                    Bounties are funded on-chain by maintainers. The first valid claim wins: submit your finding, an
+                    admin reviews it, and the reward is released to your wallet once accepted.
+                  </p>
+                  <ul className="empty-cta-links">
+                    <li>
+                      <a href="https://github.com/DepRadarOrg/DepRadar/blob/main/docs/TUTORIAL.md">Read the tutorial</a>
+                    </li>
+                    <li>
+                      <a href="https://github.com/DepRadarOrg/DepRadar/blob/main/CONTRIBUTING.md">Contributing guide</a>
+                    </li>
+                    <li>
+                      <a href="https://github.com/DepRadarOrg/DepRadar/issues">Browse GitHub issues</a>
+                    </li>
+                  </ul>
+                </div>
+              </Empty>
+            ) : (
+              <Empty>{`No ${filter.label.toLowerCase()} bounties right now.`}</Empty>
+            )
           ) : (
             <div className="grid">
               {shown.map((b) => (
