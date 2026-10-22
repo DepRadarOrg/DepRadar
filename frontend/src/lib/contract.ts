@@ -4,8 +4,11 @@
  * is needed.
  */
 import { rpc } from "@stellar/stellar-sdk";
-import { CONTRACT_ID, RPC_URL } from "../config";
+import { CONTRACT_ID, NETWORK, RPC_URL } from "../config";
 import type { Bounty, BountyStatus, Claim, ClaimStatus } from "./types";
+
+/** Contract address and network, exposed for display (e.g. the About page). */
+export { CONTRACT_ID, NETWORK };
 
 const server = new rpc.Server(RPC_URL);
 
@@ -47,6 +50,17 @@ export function parseClaim(bountyId: number, id: number, raw: Raw): Claim {
     submittedAt: Number(raw.submitted_at),
     status: enumTag(raw.status) as ClaimStatus,
   };
+}
+
+/** Address of the current contract admin. */
+export async function getAdmin(): Promise<string> {
+  return String(await query("get_admin"));
+}
+
+/** Address of the pending admin, or `null` when no transfer is in progress. */
+export async function getPendingAdmin(): Promise<string | null> {
+  const raw = await query("get_pending_admin");
+  return raw == null ? null : String(raw);
 }
 
 export async function getBountyCount(): Promise<number> {

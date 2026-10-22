@@ -85,7 +85,17 @@ pub struct PackageMeta {
     /// Number of published versions.
     #[serde(default)]
     pub versions_count: usize,
+    /// Deprecation message for the latest version, when npm marks it
+    /// deprecated. `None` means the version is not deprecated.
+    #[serde(default)]
+    pub deprecated: Option<String>,
+    /// Whether the version was yanked. Always `false` for npm (the registry
+    /// has no yank concept); carried here so crates.io metadata can share
+    /// the same shape.
+    #[serde(default)]
+    pub yanked: bool,
 }
+=======
 
 /// The subset of the registry document [`fetch_npm_metadata`] reads.
 ///
@@ -160,16 +170,36 @@ pub fn fetch_npm_metadata_with(
 
 impl PackageMeta {
     fn from_document(document: NpmDocument) -> Self {
+        let latest = document.dist_tags.latest;
+        let deprecated = latest
+            .as_deref()
+            .and_then(|version| document.versions.get(version))
+            .and_then(deprecation_message);
         PackageMeta {
             name: document.name,
             maintainers: document.maintainers,
             created: document.time.created,
             modified: document.time.modified,
             repository: repository_url(document.repository.as_ref()),
-            latest: document.dist_tags.latest,
+            latest,
             versions_count: document.versions.len(),
+            deprecated,
+            yanked: false,
         }
     }
+}
+
+/// Extracts the `deprecated` message from a version object.
+///
+/// npm marks a deprecated version with a `deprecated` string on that
+/// version's metadata. Some tooling writes `false`/`null` instead; treat
+/// anything that isn't a non-empty string as "not deprecated".
+fn deprecation_message(version: &serde_json::Value) -> Option<String> {
+    version
+        .get("deprecated")
+        .and_then(|value| value.as_str())
+        .filter(|message| !message.is_empty())
+        .map(str::to_string)
 }
 
 /// The registry serves `repository` as either a bare string or an object
@@ -292,5 +322,57 @@ mod tests {
         assert!(meta.repository.is_none());
         assert!(meta.latest.is_none());
         assert_eq!(meta.versions_count, 0);
+        assert!(meta.deprecated.is_none());
+        assert!(!meta.yanked);
+    }
+
+    /// A deprecated latest version carries its message through.
+    const DEPRECATED_DOC: &str = r#"{
+        "name": "request",
+        "dist-tags": {"latest": "2.88.2"},
+        "time": {
+            "created": "2011-03-14T00:51:29.834Z",
+            "modified": "2020-02-11T00:00:00.000Z"
+        },
+        "versions": {
+            "2.88.1": {},
+            "2.88.2": {"deprecated": "request has been deprecated, see https://github.com/request/request/issues/3142"}
+        }
+    }"#;
+
+    #[test]
+    fn parses_the_deprecation_message_of_the_latest_version() {
+        let doc: NpmDocument = serde_json::from_str(DEPRECATED_DOC).unwrap();
+        let meta = PackageMeta::from_document(doc);
+        assert_eq!(meta.latest.as_deref(), Some("2.88.2"));
+        assert_eq!(
+            meta.deprecated.as_deref(),
+            Some("request has been deprecated, see https://github.com/request/request/issues/3142")
+        );
+        assert!(!meta.yanked);
+    }
+
+    #[test]
+    fn non_deprecated_latest_version_has_no_message() {
+        let doc: NpmDocument = serde_json::from_str(LODASH_DOC).unwrap();
+        let meta = PackageMeta::from_document(doc);
+        assert!(meta.deprecated.is_none());
+        assert!(!meta.yanked);
+    }
+
+    /// A `deprecated: false` marker (written by some tooling) is not a
+    /// deprecation.
+    #[test]
+    fn false_deprecated_flag_is_not_a_deprecation() {
+        let doc: NpmDocument = serde_json::from_str(
+            r#"{
+                "name": "notdep",
+                "dist-tags": {"latest": "1.0.0"},
+                "versions": {"1.0.0": {"deprecated": false}}
+            }"#,
+        )
+        .unwrap();
+        let meta = PackageMeta::from_document(doc);
+        assert!(meta.deprecated.is_none());
     }
 }

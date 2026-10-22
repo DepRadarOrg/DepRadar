@@ -635,32 +635,44 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** Partial contribution to markdown report issue (1% implementation)
 - **Status:** In progress.
 
-### deprader_router — claims indexed by claimant — #115
+### registry — yanked / deprecated version detection — #178
 
-- **What:** Adds a per-claimant claim index to `contracts/deprader_router`
-  so a researcher's profile page can list every claim they've made without
-  scanning every bounty.
-  - **Storage:** a new persistent `ClaimsOf(Address)` key holds a
-    `Vec<(u64, u32)>` of `(bounty_id, claim_id)` pairs for each claimant,
-    appended in `submit_claim` and extended on write like the other
-    persistent entries.
-  - **Cap:** the index is capped at `MAX_CLAIMS_PER_CLAIMANT` (100) entries,
-    documented on the constant. Once a claimant reaches the cap, further
-    claims are still recorded on the bounty but are not added to their
-    index; the oldest entries are kept.
-  - **Getter:** `get_claims_of(claimant, start, limit) -> Vec<(u64, u32)>`
-    returns a page of the claimant's index, starting at `start` and
-    returning at most `limit` entries (clamped to the remaining length), so
-    callers can page through long histories. An unknown claimant or an
-    out-of-range `start` returns an empty vector.
-- **Tests:** contract tests cover claims spread across several bounties
-  (each pair appears once, in submission order), pagination (`start` /
-  `limit` windows, including a `limit` past the end and an empty result for
-  an out-of-range `start`), and the cap (a claimant at
-  `MAX_CLAIMS_PER_CLAIMANT` keeps the documented entries and the index
-  length stops growing). Snapshots regenerated.
-- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings`,
-  `cargo test --workspace` and the `wasm32v1-none` release build all pass.
-- **By:** ALLEN-AYODEJI
-- **Closes:** #115
+- **What:** Adds yanked/deprecated detection to `src/registry/`. For npm,
+  the version metadata's `deprecated` field is read; for crates.io, the
+  version's `yanked` flag is read. A pinned version that is yanked or
+  deprecated produces an informational finding carrying the deprecation
+  message (or a yanked notice) so it surfaces in reports even when no CVE
+  matches.
+- **Tests:** Fixture tests for both registries — an npm version with a
+  `deprecated` message, a crates.io version with `yanked: true`, and
+  non-flagged versions that must produce no finding.
+- **By:** TBD
+- **Closes:** #178
+- **Status:** In review.
+
+### scanner — license policy check — #179
+
+- **What:** Adds `src/license.rs`, which fetches license metadata from each
+  registry (npm `license`, PyPI `info.license` and `classifiers`, crates.io
+  `license`) for the dependencies in a lockfile and flags any license not
+  in a configurable allowlist as a low-severity finding. The allowlist is
+  configurable so teams can match their own policy.
+- **Tests:** Unit tests with mocked registry responses covering allowed
+  licenses, disallowed licenses, and packages with missing or ambiguous
+  license metadata.
+- **By:** TBD
+- **Closes:** #179
+- **Status:** In review.
+
+### frontend — About page with contract admin and configuration — #181
+
+- **What:** Adds `/about` to `frontend/`, showing the current admin
+  (`get_admin`), the pending admin if one has been proposed, the contract
+  ID, the network, and the claim and refund rules in plain language. The
+  contract reads live in `frontend/src/lib/contract.ts`; the page is linked
+  from the top bar.
+- **Tests:** Component test rendering the About page with a mocked admin
+  (and pending admin) from a stubbed contract client.
+- **By:** TBD
+- **Closes:** #181
 - **Status:** In review.
