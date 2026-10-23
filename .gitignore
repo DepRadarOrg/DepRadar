@@ -3,9 +3,12 @@ node_modules/
 dist/
 
 # Stellar CLI local config and identities — never commit secret keys
+temp_auto_push.bat
 .stellar/
 .soroban/
 **/identity/*.toml
 /fuzz/target/
 /fuzz/corpus/
 /fuzz/artifacts/
+.gitignore
+branch_structure.json

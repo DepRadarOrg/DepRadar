@@ -28,8 +28,15 @@ ask in the thread — it's cheaper than a PR that has to be reworked.
 
 ## Development Setup
 
-Prerequisites: a stable Rust toolchain, the `wasm32v1-none` target (for the
-contract), and Node.js 22+ (for `client/`).
+Prerequisites: the Rust toolchain pinned in `rust-toolchain.toml` (installed
+automatically by `rustup` on first use, with `rustfmt`, `clippy` and the
+`wasm32v1-none` target), and Node.js 22+ (for `client/`).
+
+The Rust toolchain is pinned so that a new stable release cannot silently
+introduce new clippy lints and break CI. To bump it, update the `channel`
+version in `rust-toolchain.toml` in a dedicated PR, run `cargo fmt`,
+`cargo clippy --workspace --all-targets --locked -- -D warnings` and
+`cargo test --workspace --locked`, and fix any new lints in the same PR.
 
 ```bash
 rustup target add wasm32v1-none
@@ -118,7 +125,6 @@ make sure your PR references the issue it closes (see
 [Pull Requests](#pull-requests)).
 
 ## Pull Requests
-=======
 
 - One issue per PR where possible, with `Closes #N` in the description.
 - Keep CI green: fmt, clippy, tests, the wasm build, and the client
