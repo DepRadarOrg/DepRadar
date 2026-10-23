@@ -1,9 +1,11 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { formatAmount, relativeTime, splitIssueRef, tokenSymbol } from "../lib/format";
 import type { Bounty } from "../lib/types";
 import { Identicon, Skeleton, StatusBadge } from "./ui";
 
 export function BountyCard({ bounty }: { bounty: Bounty }) {
+  const { t } = useTranslation();
   const { ecosystem, text } = splitIssueRef(bounty.issueRef);
   const open = bounty.status === "Open";
   return (
@@ -24,12 +26,10 @@ export function BountyCard({ bounty }: { bounty: Bounty }) {
       <div className="card-foot">
         <span className="creator">
           <Identicon address={bounty.creator} size={20} />
-          <span className="muted">
-            {bounty.claimCount} {bounty.claimCount === 1 ? "claim" : "claims"}
-          </span>
+          <span className="muted">{t("bounty.claim", { count: bounty.claimCount })}</span>
         </span>
         <span className={open ? "deadline-live" : "muted"}>
-          {open ? `Closes ${relativeTime(bounty.deadline)}` : "Closed"}
+          {open ? t("bounty.closesIn", { when: relativeTime(bounty.deadline) }) : t("bounty.closed")}
         </span>
       </div>
     </Link>

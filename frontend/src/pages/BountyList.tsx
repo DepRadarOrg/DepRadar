@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { BountyCard, BountyCardSkeleton } from "../components/BountyCard";
 import { Radar } from "../components/Radar";
 import { Empty, ErrorState, Skeleton } from "../components/ui";
@@ -9,13 +10,14 @@ import type { Bounty, BountyStatus } from "../lib/types";
 import { useAsync } from "../lib/useAsync";
 
 const FILTERS: { key: string; label: string; status?: BountyStatus }[] = [
-  { key: "all", label: "All" },
-  { key: "open", label: "Open", status: "Open" },
-  { key: "paid", label: "Paid", status: "Released" },
-  { key: "refunded", label: "Refunded", status: "Cancelled" },
+  { key: "all", label: "filters.all" },
+  { key: "open", label: "filters.open", status: "Open" },
+  { key: "paid", label: "filters.paid", status: "Released" },
+  { key: "refunded", label: "filters.refunded", status: "Cancelled" },
 ];
 
 export function BountyList() {
+  const { t } = useTranslation();
   const state = useAsync(listBounties, "bounties");
   const [params, setParams] = useSearchParams();
   const filter = FILTERS.find((f) => f.key === params.get("status")) ?? FILTERS[0];
@@ -27,14 +29,13 @@ export function BountyList() {
       <section className="hero">
         <div className="hero-copy">
           <p className="eyebrow">
-            <span className="live-dot" aria-hidden /> Live on Stellar testnet
+            <span className="live-dot" aria-hidden /> {t("hero.eyebrow")}
           </p>
           <h1>
-            Funded bounties, <span className="grad">not empty advisories.</span>
+            {t("hero.titlePrefix")} <span className="grad">{t("hero.titleAccent")}</span>
           </h1>
           <p className="lede">
-            DepRadar watches open-source registries for typosquats, malicious packages and known CVEs — and pays whoever
-            catches them first, on-chain, with every step verifiable.
+            {t("hero.lede")}
           </p>
           <HeroStats bounties={state.status === "success" ? state.data : null} />
         </div>
@@ -43,8 +44,8 @@ export function BountyList() {
 
       <section className="board">
         <div className="board-head">
-          <h2>Bounty board</h2>
-          <div className="chips" role="tablist" aria-label="Filter by status">
+          <h2>{t("board.title")}</h2>
+          <div className="chips" role="tablist" aria-label={t("board.filterAria")}>
             {FILTERS.map((f) => {
               const count = f.status ? bounties.filter((b) => b.status === f.status).length : bounties.length;
               return (
@@ -56,7 +57,7 @@ export function BountyList() {
                   className={`chip ${f.key === filter.key ? "chip-on" : ""}`}
                   onClick={() => setParams(f.key === "all" ? {} : { status: f.key })}
                 >
-                  {f.label}
+                  {t(f.label)}
                   {state.status === "success" && <span className="chip-count">{count}</span>}
                 </button>
               );
@@ -77,26 +78,23 @@ export function BountyList() {
             bounties.length === 0 ? (
               <Empty>
                 <div className="empty-cta">
-                  <p className="empty-cta-title">No bounties yet — the radar is quiet.</p>
-                  <p>
-                    Bounties are funded on-chain by maintainers. The first valid claim wins: submit your finding, an
-                    admin reviews it, and the reward is released to your wallet once accepted.
-                  </p>
+                  <p className="empty-cta-title">{t("empty.title")}</p>
+                  <p>{t("empty.body")}</p>
                   <ul className="empty-cta-links">
                     <li>
-                      <a href="https://github.com/DepRadarOrg/DepRadar/blob/main/docs/TUTORIAL.md">Read the tutorial</a>
+                      <a href="https://github.com/DepRadarOrg/DepRadar/blob/main/docs/TUTORIAL.md">{t("empty.links.tutorial")}</a>
                     </li>
                     <li>
-                      <a href="https://github.com/DepRadarOrg/DepRadar/blob/main/CONTRIBUTING.md">Contributing guide</a>
+                      <a href="https://github.com/DepRadarOrg/DepRadar/blob/main/CONTRIBUTING.md">{t("empty.links.contributing")}</a>
                     </li>
                     <li>
-                      <a href="https://github.com/DepRadarOrg/DepRadar/issues">Browse GitHub issues</a>
+                      <a href="https://github.com/DepRadarOrg/DepRadar/issues">{t("empty.links.issues")}</a>
                     </li>
                   </ul>
                 </div>
               </Empty>
             ) : (
-              <Empty>{`No ${filter.label.toLowerCase()} bounties right now.`}</Empty>
+              <Empty>{t("empty.noneForFilter", { filter: t(filter.label).toLowerCase() })}</Empty>
             )
           ) : (
             <div className="grid">
