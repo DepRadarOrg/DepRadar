@@ -52,7 +52,7 @@ jobs:
           Compress-Archive -Path release/depradar.exe -DestinationPath depradar-${{ matrix.target }}.zip
           $hash = (Get-FileHash -Algorithm SHA256 depradar-${{ matrix.target }}.zip).Hash.ToLower()
           "$hash  depradar-${{ matrix.target }}.zip" | Set-Content depradar-${{ matrix.target }}.zip.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: depradar-${{ matrix.target }}
           path: |
@@ -84,7 +84,7 @@ jobs:
         run: |
           npm ci
           npx --yes @cyclonedx/cyclonedx-npm@2 --omit dev --output-format JSON --output-file ../depradar-frontend.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: '*.cdx.json'
