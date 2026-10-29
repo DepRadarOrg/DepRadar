@@ -15,8 +15,21 @@ npm ci
 npm run dev        # http://localhost:5173
 ```
 
-The dashboard defaults to the live v2 testnet contract. To point it at
-another deployment, copy `.env.example` to `.env.local` and edit it.
+The dashboard defaults to the live v2 testnet contract. The contract ID
+lives in `src/config.ts` and can be overridden without touching code by
+copying `.env.example` to `.env.local` and editing it. After deploying a
+new contract, follow [DEPLOYMENT.md](../DEPLOYMENT.md) to update the ID
+here and in the other consumers.
+
+Set `VITE_SITE_URL` to the public URL the dashboard is served from so the
+Open Graph / Twitter card tags in `index.html` point at an absolute
+`og-image.png` (link-preview crawlers ignore relative image URLs).
+
+The bounty page shows the typosquat scanner's verdict for the bounty's
+package. The scanner is the Rust scorer compiled to WebAssembly; run
+`npm run build:wasm` (needs `wasm-pack` and the `wasm32-unknown-unknown`
+target) before `npm run dev` or `npm run build` to include it. Without it
+the panel says the scanner isn't available and everything else works.
 
 ## Scripts
 
@@ -27,6 +40,7 @@ another deployment, copy `.env.example` to `.env.local` and edit it.
 | `npm run lint` | oxlint (CI fails on any warning) |
 | `npm test` | Vitest unit and component tests |
 | `npm run build` | Production build to `dist/` |
+| `npm run build:wasm` | Builds the typosquat scanner (`crates/typosquat-wasm`) into `public/wasm/` with [`wasm-pack`](https://rustwasm.github.io/wasm-pack/) |
 
 ## Layout
 
@@ -38,7 +52,9 @@ src/
   lib/format.ts       amounts (7 decimals), addresses, dates
   lib/insights.ts     board stats, bounty timeline, user-facing state labels
   lib/useAsync.ts     loading / error / success state for async reads
-  components/         Layout, Radar, BountyCard, ui (badges, identicons, skeletons, states)
+  lib/errors.ts       plain-language messages for common RPC failures
+  lib/typosquat.ts    loads the wasm typosquat scanner; package from issue_ref
+  components/         Layout, Radar, BountyCard, ErrorBoundary, ScannerDetection, ui (badges, identicons, skeletons, states)
   pages/              BountyList (/), BountyDetail (/bounty/:id)
 ```
 

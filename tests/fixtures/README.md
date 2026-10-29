@@ -41,3 +41,10 @@ covered by the repository's [MIT license](../../LICENSE).
 | [`package.json`](package.json) | `package.json` | `src/lockfile/mod.rs`, `src/lockfile/npm.rs` |
 | [`pypi-basic/requirements.txt`](pypi-basic/requirements.txt) | `requirements.txt` | `tests/lockfile.rs` |
 | [`Pipfile.lock`](Pipfile.lock) | `Pipfile.lock` | `src/lockfile/mod.rs`, `src/lockfile/pypi.rs` |
+| [`behavioral/leftpad-lite-v1/`](behavioral/leftpad-lite-v1) | unpacked npm package (clean) | `src/behavioral/diff.rs` |
+| [`behavioral/leftpad-lite-v2/`](behavioral/leftpad-lite-v2) | unpacked PyPI sdist (adds a malicious `setup.py`) | `src/behavioral/diff.rs` |
+| [`behavioral/leftpad-lite-docs/`](behavioral/leftpad-lite-docs) | `leftpad-lite-v1` + `CHANGELOG.md` | `src/behavioral/diff.rs` |
+| [`behavioral/beacon-v1/`](behavioral/beacon-v1) | unpacked PyPI sdist (`setup.py` calls `requests.get`) | `src/behavioral/diff.rs` |
+| [`behavioral/beacon-v2/`](behavioral/beacon-v2) | `beacon-v1` + a new `base64.b64decode` call | `src/behavioral/diff.rs` |
+| [`behavioral/npmish-v1/`](behavioral/npmish-v1) | unpacked npm package (no lifecycle scripts) | `src/behavioral/diff.rs` |
+| [`behavioral/npmish-v2/`](behavioral/npmish-v2) | `npmish-v1` + a `postinstall` script | `src/behavioral/diff.rs` |

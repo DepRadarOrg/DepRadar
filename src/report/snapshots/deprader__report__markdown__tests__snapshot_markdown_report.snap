@@ -1,0 +1,55 @@
+---
+source: src/report/markdown.rs
+expression: output
+---
+# DepRadar Security Report
+
+## Summary
+
+| Metric | Count |
+|--------|-------|
+| Total Packages | 150 |
+| Typosquats | 1 |
+| Vulnerabilities | 1 |
+| Suppressed | 0 |
+| Warnings | 0 |
+
+## Findings
+
+### Finding #1
+
+![HIGH](https://img.shields.io/badge/HIGH-important)
+
+**Package:** `expresss`
+ @ `1.0.0`
+**Ecosystem:** npm
+**Severity:** high
+**Scope:** Direct
+
+#### Details
+
+This package appears to be a typosquat of a popular package.
+
+- **Edit distance**: 1 edit(s) from `express`
+
+**Recommendation**: Remove this dependency immediately and verify it was installed intentionally.
+
+### Finding #2
+
+![MEDIUM](https://img.shields.io/badge/MEDIUM-yellow)
+
+**Package:** `lodash`
+ @ `4.17.4`
+**Ecosystem:** npm
+**Severity:** medium
+**Scope:** Transitive
+**Path:** my-app → webpack → lodash
+
+#### Details
+
+Known vulnerability detected.
+
+- **Advisory ID**: `GHSA-29mw-wpgm-hmr9`
+- **Reference**: [View on OSV](https://osv.dev/vulnerability/GHSA-29mw-wpgm-hmr9)
+
+**Recommendation**: Update to a patched version or find an alternative package.

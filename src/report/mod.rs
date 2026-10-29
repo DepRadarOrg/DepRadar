@@ -7,6 +7,7 @@
 //!
 //! - [`sarif`] — SARIF 2.1.0, for GitHub code scanning
 //! - [`text`] — terminal output with color-coded severity labels
+//! - [`markdown`] — Markdown format for GitHub issues and PR comments
 
 use std::collections::HashMap;
 
@@ -16,6 +17,7 @@ use crate::cve::osv_client::get_vulnerability;
 use crate::cve::severity::assess;
 use crate::model::{Finding, FindingKind};
 
+pub mod markdown;
 pub mod sarif;
 pub mod text;
 

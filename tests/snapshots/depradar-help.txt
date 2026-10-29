@@ -3,14 +3,17 @@ Check package names and lockfiles for typosquats and known vulnerabilities
 Usage: depradar [OPTIONS] <COMMAND>
 
 Commands:
-  name  Score a single package name against the popular-package dataset
-  scan  Scan a lockfile, or every lockfile under a directory
-  help  Print this message or the help of the given subcommand(s)
+  name         Score a single package name against the popular-package dataset
+  scan         Scan a lockfile, or every lockfile under a directory
+  watch        Watch a package registry and emit typosquat findings as JSON lines
+  completions  Generate shell completion scripts to stdout
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
-  -f, --format <FORMAT>  Output format. `json` prints exactly one JSON document to stdout; errors and warnings still go to stderr [default: text] [possible values: text, json]
-  -h, --help             Print help
-  -V, --version          Print version
+  -f, --format <FORMAT>    Output format. `json` prints exactly one JSON document to stdout; errors and warnings still go to stderr [possible values: text, json]
+      --fail-on <FAIL_ON>  Severity level at which the run exits with code 1 (`scan` only). Accepted values: low, medium, high, critical, none. Overrides `fail_on` in `depradar.toml` [possible values: none, low, medium, high, critical]
+  -h, --help               Print help
+  -V, --version            Print version
 
 Examples:
   depradar name expresss                 Check one package name for typosquat signals
@@ -19,6 +22,7 @@ Examples:
   depradar scan .                        Scan every lockfile in a directory or monorepo
   depradar scan . --offline              Typosquat checks only, no OSV lookup
   depradar --format json scan . | jq     Machine-readable output for CI
+  depradar watch --registry npm          Watch the npm registry and score new packages
 
 Exit codes:
   0  No findings

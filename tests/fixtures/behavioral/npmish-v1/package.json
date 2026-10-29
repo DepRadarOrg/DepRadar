@@ -1,0 +1,8 @@
+{
+  "name": "npmish",
+  "version": "0.3.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  }
+}

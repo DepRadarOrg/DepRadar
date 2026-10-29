@@ -9,3 +9,5 @@ pub mod cache;
 pub mod osv_client;
 pub mod remediation;
 pub mod severity;
+
+pub use osv_client::{fetch_vuln, OsvVulnerability};

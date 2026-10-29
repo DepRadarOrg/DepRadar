@@ -10,6 +10,119 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Dependency licenses and sources — `cargo deny` — #163
+
+- **What:** Adds [`deny.toml`](deny.toml) allowing MIT, Apache-2.0, BSD,
+  ISC and Unicode licenses (with narrow per-crate exceptions for
+  `option-ext` (MPL-2.0) and `webpki-roots` (CDLA-Permissive-2.0)), denying
+  wildcard versions, unknown registries and unknown git sources, and
+  reporting duplicate versions. A `cargo deny` job in the Dependency Audit
+  workflow runs `cargo deny check licenses bans sources`.
+- **Verified:** `cargo deny check licenses bans sources` passes locally
+  (`bans ok, licenses ok, sources ok`).
+- **By:** CodePrincess360
+- **Closes:** #163
+- **Status:** In review.
+
+### Scanner detection on the bounty page — #166
+
+- **What:** New [`crates/typosquat-wasm`](crates/typosquat-wasm) compiles
+  the typosquat scorer to WebAssembly with `wasm-bindgen`, mounting
+  `src/typosquat` directly so the root crate's network dependencies stay
+  out of the wasm build. Its `scan(name)` returns the confidence and the
+  signals that fire. The bounty page parses the package from `issue_ref`
+  (or uses the structured `package` field) and shows those signals; the
+  module is built with `npm run build:wasm` and the panel degrades
+  gracefully when it isn't present. CI builds the crate for
+  `wasm32-unknown-unknown`.
+- **Tests:** Rust integration tests for the detection mapping and JSON
+  output; a `ScannerDetection` component test with the wasm module mocked;
+  unit tests for the `issue_ref` package parser.
+- **By:** CodePrincess360
+- **Closes:** #166
+- **Status:** In review.
+
+### Error boundary and friendly RPC errors — #167
+
+- **What:** A top-level React `ErrorBoundary` replaces a blank page with a
+  message and a Reload button when rendering fails. `ErrorState` now maps
+  common RPC failures — network down, rate limited, contract not found —
+  to plain-language messages via `lib/errors.ts`, falling back to the raw
+  message for anything else.
+- **Tests:** Boundary render/reload tests and a test per mapped error.
+- **By:** CodePrincess360
+- **Closes:** #167
+- **Status:** In review.
+
+### Open Graph and social preview tags — #169
+
+- **What:** `frontend/index.html` gains `og:*` and Twitter
+  `summary_large_image` card tags with a 1200×630 `og-image.png` derived
+  from `assets/banner.svg`. `VITE_SITE_URL` makes the image URL absolute
+  for link-preview crawlers.
+- **By:** CodePrincess360
+- **Closes:** #169
+- **Status:** In review.
+
+### CLI — `depradar explain <advisory-id>` — #180
+
+- **What:** Adds `depradar explain <advisory-id>` to
+  [`src/bin/depradar.rs`](src/bin/depradar.rs). It fetches the advisory from
+  OSV (`GET /v1/vulns/{id}`) and prints its summary, severity, affected
+  range, fixed version and references, so a `GHSA-…` seen in a report can be
+  inspected without leaving the terminal.
+- **Tests:** An `assert_cmd` integration test in [`tests/cli.rs`](tests/cli.rs)
+  with the OSV call mocked, checking the printed advisory details.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #180
+- **Status:** In review.
+
+### Release binaries for the CLI — #88
+
+- **What:** Adds a tag-triggered GitHub Actions workflow that builds the
+  `depradar` CLI for Linux x86_64, macOS Apple Silicon, and Windows x86_64.
+  Each release archive includes a SHA-256 checksum. The README documents
+  downloading, checksum verification, and extraction without a Rust toolchain.
+- **By:** dev-fani
+- **Closes:** #88
+- **Status:** Implemented; release workflow validation is recorded in the PR.
+
+### CLI build identifier — #87
+
+- **What:** `depradar --version` now prints the package semver and the full
+  Git commit SHA embedded at build time. Builds without an available Git
+  checkout report `unknown`. An integration test checks the output format.
+- **By:** dev-fani
+- **Closes:** #87
+- **Status:** Implemented; verification is recorded in the PR.
+
+### Shared crawler contract and checkpoints — #89
+
+- **What:** Defines the shared `Crawler` trait, numeric sequence
+  `Checkpoint`, and typed `PackageEvent` model. Its cursor documentation
+  specifies retry and persistence behavior. Adds an in-memory `FakeCrawler`
+  with a checkpoint advancement test.
+- **By:** dev-fani
+- **Closes:** #89
+- **Status:** Implemented; verification is recorded in the PR.
+
+### npm changes-feed crawler — #90
+
+- **What:** Adds `NpmCrawler` for npm's CouchDB `_changes` feed. It pages
+  through feed changes, emits new-package and new-version events, resumes
+  from the sequence checkpoint, and uses the shared rate-limited HTTP client.
+  The implementation follows npm's current `/registry/_changes` endpoint;
+  because it omits package documents, changed package metadata is fetched
+  separately from the public registry.
+  Mocked HTTP tests cover paging, resumption, version classification and
+  packages that return 404. A live poll from sequence `138448270` advanced to
+  `138448271` and emitted no event for the sampled metadata update; the PR
+  records that run.
+- **By:** dev-fani
+- **Closes:** #90
+- **Status:** Implemented; verification is recorded in the PR.
+
 ### deprader_router contract — create_bounty / submit_claim / release
 
 - **What:** Initial Soroban smart contract at `contracts/deprader_router/`.
@@ -320,6 +433,90 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** N/A
 - **Status:** Merged.
 
+### typosquat scanner — crates.io popular-package dataset
+
+- **What:** Adds `data/popular-packages/crates-top1000.json`, the top 1000
+  crates by recent (90-day) downloads from the crates.io API, taken on
+  2026-10-16, lowercased and ordered most-downloaded first. `load_popular_packages()` now includes
+  it after the npm and PyPI lists, so Rust lookalikes (`serde_json`
+  imitations, `tokio` lookalikes) are scored like everything else. A new
+  `data/popular-packages/README.md` records each file's source and snapshot
+  date. The ecosystem-aware API (#24) doesn't exist yet. The existing
+  `Ecosystem::CratesIo` variant in `cve::osv_client` is there for it to map
+  onto this file.
+- **Tests:** the loader test now also asserts `serde` and `tokio` are
+  present.
+- **By:** Austinaminu2
+- **Closes:** #39
+- **Status:** In review.
+
+### typosquat scanner — dataset validation test
+
+- **What:** A test in `src/typosquat/dataset.rs` loads every bundled
+  popular-package file and checks that each entry has no leading or trailing
+  whitespace, is lowercase, is a valid name on its registry, and is not a
+  duplicate.
+  - npm names are checked against npm's naming rules, including `@scope/`
+    prefixes.
+  - PyPI names are checked against PEP 508, and duplicates are found after
+    PEP 503 normalisation, so `ruamel.yaml` and `ruamel-yaml` count as the
+    same project.
+  - It also checks that each file is a flat JSON array of strings, and that
+    the loader's hand-rolled parser reads it the same way `serde_json` does.
+
+  All failures are reported together, one line per entry. A second test
+  feeds the checks deliberately broken input (whitespace, uppercase, an
+  invalid character, a leading `_`, a duplicate, a PEP 503 duplicate, a
+  non-string element) and asserts each one is caught.
+- **Data fix:** lowercased the 9 mixed-case PyPI entries the new test
+  flagged (`PyWavelets`, `types-PyYAML`, `cx-Oracle`, …).
+- **By:** Austinaminu2
+- **Closes:** #41
+- **Status:** In review.
+
+### typosquat scanner — dataset regeneration script
+
+- **What:** Adds `scripts/update-datasets.py`, a standard-library-only
+  Python script that rebuilds `data/popular-packages/*-top1000.json` from
+  public download stats.
+  - Sources: [`npm-high-impact`](https://github.com/wooorm/npm-high-impact)
+    for npm, [Top PyPI Packages](https://hugovk.dev/top-pypi-packages/) for
+    PyPI, and the crates.io API sorted by recent downloads.
+  - For each registry it keeps the top 1000 valid, distinct names (PEP 503
+    normalised for PyPI) and writes them lowercased in download order (the
+    scanner uses position as a popularity rank), in the existing two-space
+    JSON format.
+  - It only rewrites a file whose content changed, so a second run leaves no
+    diff.
+  - `data/popular-packages/README.md` documents the sources, how to run the
+    script, and the caveats.
+  - The dataset validation test now covers `crates-top1000.json` as well.
+- **Data:** regenerated the npm and PyPI lists on 2026-10-16, replacing the
+  hand-curated snapshots (808 npm and 526 PyPI names changed). The crates.io
+  list, from #39, came out unchanged. Ranking npm by downloads favours
+  transitive dependencies, so `vue` and `@angular/core` drop out of the top
+  1000. `react`, `express`, `lodash`, `axios`, `requests`, `django`,
+  `serde` and `tokio` all remain.
+- **By:** Austinaminu2
+- **Closes:** #40
+- **Status:** In review. Builds on #39 and #41.
+
+### typosquat scanner — JSON-serializable `ScanResult`
+
+- **What:** `ScanResult` in `src/typosquat/scanner.rs` now derives
+  `serde::Serialize` and `serde::Deserialize` with snake_case keys, so the
+  CLI and future report formats can emit machine-readable output.
+  `distance_match` serializes as a `[name, distance]` array and an unset
+  signal as `null`.
+- **Tests:** one test asserts the exact JSON for `expresss`
+  (all signal fields plus `confidence`, e.g. `"distance_match":["express",1]`).
+  A round-trip test serializes and deserializes three results (distance
+  only, both signals, clean) through `serde_json` and checks each comes back
+  unchanged.
+- **By:** Austinaminu2
+- **Closes:** #38
+- **Status:** In review.
+
 ### typosquat — top-N nearest matches
 
 - **What:** Adds `nearest_matches(candidate, dataset, n) -> Vec<(String, usize)>`
@@ -458,6 +655,137 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
   line) through `name -` in both text and JSON modes.
 - **By:** eeshasalaudeen734-creator
 - **Closes:** #82
+- **Status:** Merged.
+
+### CLI — shell completions
+
+- **What:** Adds `depradar completions <bash|zsh|fish|powershell>` to
+  [`src/bin/depradar.rs`](src/bin/depradar.rs) using `clap_complete` to
+  generate shell completion scripts to stdout, and documents installation
+  steps for Bash, Zsh, Fish, and PowerShell in [`README.md`](README.md).
+- **Tests:** `assert_cmd` integration tests in [`tests/cli.rs`](tests/cli.rs)
+  verifying that `bash`, `zsh`, `fish`, and `powershell` each exit zero and
+  emit non-empty completion scripts referencing `depradar`, and that
+  unsupported shell names exit with code 2.
+- **By:** deshrajvermay9517-png
+- **Closes:** #86
+- **Status:** In review.
+
+### scanner — Markdown report format (initial implementation)
+
+- **What:** Adds initial Markdown report output format in
+  [`markdown.rs`](src/report/markdown.rs). Renders scan reports as Markdown
+  suitable for GitHub issues and PR comments. Output includes a summary
+  table (packages scanned, typosquats, vulnerabilities, suppressed,
+  warnings), detailed sections per finding with severity badges, and
+  sections for suppressed findings and warnings. Each finding shows package
+  details, ecosystem, severity, scope (direct/transitive), dependency path,
+  and specific details based on finding type (typosquat with edit distance
+  and homoglyph information, or vulnerability with OSV reference links).
+- **Tests:** Snapshot test using `insta` covering a report with both
+  typosquat and vulnerability findings. Unit tests for severity badge colors
+  and ecosystem formatting across all supported ecosystems.
+- **By:** coderolisa
+- **Closes:** Partial contribution to markdown report issue (1% implementation)
+- **Status:** In progress.
+
+### Web dashboard — empty-state call to action for researchers — #182
+
+- **What:** `frontend/src/pages/BountyList.tsx` no longer stops at "No
+  bounties" when nothing is open. The empty state now explains how bounties
+  work (find a vulnerability, open an issue, get paid on release) and links
+  to the tutorial, `CONTRIBUTING.md` and the repo's GitHub issues so a
+  researcher has a next step.
+- **Verified:** `npm run lint`, `npm run typecheck`, `npm run test` and
+  `npm run build` pass in `frontend/`; a screenshot of the empty state is in
+  the PR.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #182
+- **Status:** In review.
+
+### Read client — `--contract` / `--rpc` flags and env fallbacks — #183
+
+- **What:** `client/src/index.ts` no longer hard-codes the contract ID and
+  RPC URL. Both are configurable via `--contract` / `--rpc` flags, falling
+  back to `DEPRADAR_CONTRACT_ID` / `DEPRADAR_RPC_URL`, then to the previous
+  defaults. `client/README.md` documents the flags, the env vars and the
+  precedence order.
+- **Verified:** `npm run typecheck` passes in `client/`; the client still
+  reads the live testnet contract with the defaults and with each override.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #183
+- **Status:** In review.
+
+### CI — cache-friendly, faster workflow — #184
+
+- **What:** `.github/workflows/ci.yml` now uses `Swatinem/rust-cache` with
+  per-job cache keys, passes `--locked` to every Cargo invocation, and adds
+  a `concurrency` group that cancels superseded PR runs. Before/after job
+  timings are recorded in the PR description.
+- **Verified:** the workflow runs green on the PR.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #184
+- **Status:** In review.
+
+### Docs — issue and PR labels guide — #185
+
+- **What:** Adds a "Labels" section to `CONTRIBUTING.md` listing every label
+  the repo uses — the area labels (`typosquat`, `contract`, `frontend`, …),
+  `good first issue` and `Stellar Wave` — and when each is applied.
+- **Verified:** every command and link in the new section was checked.
+- **By:** ALLEN-AYODEJI
+- **Closes:** #185
+- **Status:** In review.
+
+### Integration test — scan → bounty on a local contract — #161
+
+- **What:** Adds [`tests/scan_to_bounty.rs`](tests/scan_to_bounty.rs). It
+  scores `expresss` with `score_package`, turns the result into a
+  typosquat `Finding`, builds the bounty's `issue_ref` with
+  `Finding::issue_ref`, then uses soroban testutils to create the bounty on a
+  locally registered router, parse the stored `issue_ref` back, submit a
+  claim and release it to the claimant. The root crate gains
+  `deprader-router` (with `testutils`) and `soroban-sdk` (with `testutils`)
+  as dev-dependencies, so the test runs in `cargo test --workspace`.
+- **By:** MamaLove360
+- **Closes:** #161
+- **Status:** In review.
+
+### Standard `issue_ref` format for findings — #162
+
+- **What:** Documents `<ecosystem>:<package>[@<version>]#<kind>[:<detail>]`
+  in [`docs/issue-ref.md`](docs/issue-ref.md). Adds `IssueRef`,
+  `IssueKind`, `format_issue_ref`, `parse_issue_ref` and
+  `Finding::issue_ref` to [`src/model.rs`](src/model.rs), and mirrors them as
+  `formatIssueRef` / `parseIssueRef` in
+  [`frontend/src/lib/format.ts`](frontend/src/lib/format.ts). Free-form refs
+  parse to "no match" so existing bounties still render as text.
+- **Tests:** Round-trip and rejection tests in both Rust and Vitest,
+  covering npm scopes, Maven coordinates and unpinned versions.
+- **By:** MamaLove360
+- **Closes:** #162
+- **Status:** In review.
+
+### Security — CycloneDX SBOMs on every release — #164
+
+- **What:** [`.github/workflows/release.yml`](.github/workflows/release.yml)
+  gains an `sbom` job that generates CycloneDX JSON SBOMs with
+  `cargo cyclonedx` (CLI crate and router contract) and
+  `@cyclonedx/cyclonedx-npm` (frontend production dependencies). The
+  `publish` job waits for it and attaches the SBOMs to the GitHub Release
+  alongside the binaries. The README lists the SBOM files.
+- **By:** MamaLove360
+- **Closes:** #164
+- **Status:** In review.
+
+### CI — scan DepRadar's own lockfiles — #165
+
+- **What:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) gains a
+  `self-scan` job that builds the `depradar` CLI and runs
+  `depradar --fail-on critical scan` on `Cargo.lock`,
+  `client/package-lock.json` and `frontend/package-lock.json`.
+- **By:** MamaLove360
+- **Closes:** #165
 - **Status:** In review.
 
 ### behavioral — install-time script detection

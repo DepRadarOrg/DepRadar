@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Typosquat scanner wasm, built by `npm run build:wasm`
+public/wasm/

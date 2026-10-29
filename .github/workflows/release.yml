@@ -1,0 +1,108 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build CLI
+        run: cargo build --locked --release --bin depradar --target ${{ matrix.target }}
+      - name: Package and checksum (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p release
+          cp target/${{ matrix.target }}/release/depradar release/
+          tar -C release -czf depradar-${{ matrix.target }}.tar.gz depradar
+          shasum -a 256 depradar-${{ matrix.target }}.tar.gz > depradar-${{ matrix.target }}.tar.gz.sha256
+      - name: Package and checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/depradar.exe release/
+          Compress-Archive -Path release/depradar.exe -DestinationPath depradar-${{ matrix.target }}.zip
+          $hash = (Get-FileHash -Algorithm SHA256 depradar-${{ matrix.target }}.zip).Hash.ToLower()
+          "$hash  depradar-${{ matrix.target }}.zip" | Set-Content depradar-${{ matrix.target }}.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: depradar-${{ matrix.target }}
+          path: |
+            depradar-${{ matrix.target }}.${{ matrix.archive }}
+            depradar-${{ matrix.target }}.${{ matrix.archive }}.sha256
+          if-no-files-found: error
+
+  sbom:
+    name: Generate SBOMs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx
+      - name: Rust SBOM (CycloneDX)
+        run: |
+          cargo cyclonedx --format json --override-filename sbom
+          mv sbom.json depradar-rust.cdx.json
+          mv contracts/deprader_router/sbom.json deprader-router-rust.cdx.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend SBOM (CycloneDX)
+        working-directory: frontend
+        run: |
+          npm ci
+          npx --yes @cyclonedx/cyclonedx-npm@2 --omit dev --output-format JSON --output-file ../depradar-frontend.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: '*.cdx.json'
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build, sbom]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, 'dry-run') }}
+          make_latest: ${{ !contains(github.ref_name, 'dry-run') }}

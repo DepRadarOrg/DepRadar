@@ -95,8 +95,8 @@ mod tests {
     fn multi_token_popular_name_with_bait_is_flagged() {
         let dataset = load_popular_packages();
         assert_eq!(
-            combosquat("babel-core-secure", &dataset).as_deref(),
-            Some("babel-core")
+            combosquat("cross-spawn-secure", &dataset).as_deref(),
+            Some("cross-spawn")
         );
     }
 

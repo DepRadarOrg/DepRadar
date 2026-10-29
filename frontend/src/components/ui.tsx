@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { explorer } from "../config";
+import { friendlyError } from "../lib/errors";
 import { shortAddress } from "../lib/format";
 import { BOUNTY_LABEL, CLAIM_LABEL } from "../lib/insights";
 import type { BountyStatus, ClaimStatus } from "../lib/types";
@@ -75,10 +76,11 @@ export function Loading({ label = "Scanning testnet…" }: { label?: string }) {
 }
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
+  const { title, detail } = friendlyError(error);
   return (
     <div className="state state-error" role="alert">
-      <strong>Couldn't read the contract.</strong>
-      <span className="muted">{error.message}</span>
+      <strong>{title}</strong>
+      <span className="muted">{detail}</span>
       {onRetry && (
         <button type="button" className="btn" onClick={onRetry}>
           Retry
