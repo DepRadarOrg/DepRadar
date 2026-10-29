@@ -787,3 +787,25 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** MamaLove360
 - **Closes:** #165
 - **Status:** In review.
+
+### behavioral — install-time script detection
+
+- **What:** Adds `src/behavioral/scripts.rs`, a new scanner for detecting
+install-time scripts in package.json that execute during package
+installation without user interaction — a common malware delivery vector.
+`install_scripts(package_json: &str) -> Vec<(String, String)>` parses the
+JSON and returns every `preinstall`, `install`, `postinstall` and `prepare`
+script as `(script_name, script_command)` tuples. Malformed JSON or missing
+`scripts` sections yield an empty vector. Wired into `src/lib.rs` as the
+new `behavioral` module. Adds `FindingKind::InstallScript { script_name, script_command }` to [`model.rs`](src/model.rs), rated `Severity::High` by
+`severity_of`. All match sites updated: `ignore.rs` (install scripts not
+matchable by advisory), `report/sarif.rs` (new SARIF rule `install-script`
+at index 2), and `bin/depradar.rs` (JSON output format).
+- **Tests:** 10 unit tests in `scripts.rs` covering no scripts, empty
+scripts, single and all-four install scripts, mixed scripts (install +
+non-install), malformed JSON, non-object scripts values, non-string script
+commands, complex/malicious commands (`curl | bash`, child_process calls),
+and empty input. All 164 workspace tests pass.
+- **By:** Mr Nabees
+- **Closes:** #99
+- **Status:** In review.

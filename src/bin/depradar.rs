@@ -729,6 +729,14 @@ fn finding_json(finding: &Finding) -> Value {
             "kind": "vulnerability",
             "advisory_id": advisory_id,
         }),
+        FindingKind::InstallScript {
+            script_name,
+            script_command,
+        } => json!({
+            "kind": "install_script",
+            "script_name": script_name,
+            "script_command": script_command,
+        }),
     };
     if let (Value::Object(fields), Value::Object(extra)) = (&mut value, kind) {
         fields.extend(extra);
