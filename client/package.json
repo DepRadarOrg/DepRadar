@@ -11,11 +11,11 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
-    "@stellar/stellar-sdk": "^17.0.1"
+    "@stellar/stellar-sdk": "^17.4.0"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
-    "tsx": "^4.23.13",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }
