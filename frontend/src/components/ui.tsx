@@ -34,13 +34,16 @@ export function Identicon({ address, size = 28 }: { address: string; size?: numb
   );
 }
 
-export function AddressLink({ address, avatar = false }: { address: string; avatar?: boolean }) {
+export function AddressLink({ address, avatar = false, copy = false }: { address: string; avatar?: boolean; copy?: boolean }) {
   const href = address.startsWith("C") ? explorer.contract(address) : explorer.account(address);
   return (
-    <a className="address" href={href} target="_blank" rel="noreferrer" title={address}>
-      {avatar && <Identicon address={address} size={20} />}
-      <span className="mono">{shortAddress(address)}</span>
-    </a>
+    <span className="address-wrap">
+      <a className="address" href={href} target="_blank" rel="noreferrer" title={address}>
+        {avatar && <Identicon address={address} size={20} />}
+        <span className="mono">{shortAddress(address)}</span>
+      </a>
+      {copy && <CopyButton value={address} />}
+    </span>
   );
 }
 

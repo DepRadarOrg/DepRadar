@@ -43,6 +43,38 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * Light theme (#135). Opt-in via `[data-theme="light"]` on <html>, applied by
+ * the manual toggle in Layout; without the attribute the dark default holds.
+ * Only the handful of tokens the palette actually exposes need overriding —
+ * status hues (teal/amber/red/green) read fine on both.
+ */
+[data-theme="light"] {
+  --bg: #f1f5f9;
+  --bg-2: #e2e8f0;
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-solid: #ffffff;
+  --surface-hover: rgba(241, 245, 249, 0.95);
+  --border: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.24);
+
+  --text: #334155;
+  --text-h: #0f172a;
+  --muted: #64748b;
+
+  --teal-soft: rgba(20, 184, 166, 0.12);
+  --slate-soft: rgba(15, 23, 42, 0.08);
+
+  color-scheme: light;
+}
+
+[data-theme="light"] body {
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(45, 212, 191, 0.15), transparent 60%),
+    radial-gradient(900px 500px at -10% 20%, rgba(59, 130, 246, 0.1), transparent 60%),
+    var(--bg);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -366,6 +398,27 @@ button:hover {
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
 }
+.board-search {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.board-search input[type="search"] {
+  background: var(--slate-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-h);
+  font: inherit;
+  padding: 0.35rem 0.9rem;
+  min-width: 14rem;
+}
+
+.board-search input[type="search"]:focus {
+  outline: none;
+  border-color: rgba(45, 212, 191, 0.5);
+}
+
 .chips {
   display: flex;
   gap: 0.4rem;

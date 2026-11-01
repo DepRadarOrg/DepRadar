@@ -48,7 +48,7 @@ function Detail({ bounty, claims }: { bounty: Bounty; claims: Claim[] }) {
           </div>
           <h1>{text}</h1>
           <p className="muted">
-            Funded by <AddressLink address={bounty.creator} avatar /> on {formatDate(bounty.createdAt)}
+            Funded by <AddressLink address={bounty.creator} avatar copy /> on {formatDate(bounty.createdAt)}
           </p>
         </div>
         <div className="detail-reward">
@@ -95,7 +95,7 @@ function Detail({ bounty, claims }: { bounty: Bounty; claims: Claim[] }) {
               <dd>
                 {tokenSymbol(bounty.token)}
                 {bounty.token === NATIVE_XLM_SAC ? <span className="muted"> · native</span> : null}{" "}
-                <AddressLink address={bounty.token} />
+                <AddressLink address={bounty.token} copy />
               </dd>
             </div>
             <div>
@@ -132,14 +132,14 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
           <div className="claim-box">
             <Identicon address={event.claim.claimant} />
             <div>
-              <AddressLink address={event.claim.claimant} />
+              <AddressLink address={event.claim.claimant} copy />
               <p className="proof">{event.claim.proofRef}</p>
             </div>
           </div>
         )}
         {event.kind === "paid" && event.claim && (
           <p className="muted">
-            Sent to <AddressLink address={event.claim.claimant} avatar />
+            Sent to <AddressLink address={event.claim.claimant} avatar copy />
           </p>
         )}
       </div>

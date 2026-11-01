@@ -1,5 +1,7 @@
 import { useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { BountyCard, BountyCardSkeleton } from "../components/BountyCard";
+import { bountyPackage } from "../lib/typosquat";
 import { Radar } from "../components/Radar";
 import { Empty, ErrorState, Skeleton } from "../components/ui";
 import { listBounties } from "../lib/contract";
@@ -21,6 +23,34 @@ export function BountyList() {
   const filter = FILTERS.find((f) => f.key === params.get("status")) ?? FILTERS[0];
   const bounties = state.status === "success" ? state.data : [];
   const shown = filter.status ? bounties.filter((b) => b.status === filter.status) : bounties;
+
+  // Search by finding text (#122): case-insensitive substring over the package
+  // name and issue reference. The input is debounced (150ms) into the `q`
+  // URL param so the view stays shareable without re-rendering every keystroke.
+  const urlQuery = params.get("q") ?? "";
+  const [input, setInput] = useState(urlQuery);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = new URLSearchParams(params);
+      if (input) next.set("q", input);
+      else next.delete("q");
+      if (next.toString() !== params.toString()) setParams(next, { replace: true });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [input, params, setParams]);
+  useEffect(() => {
+    // Keep the input in sync when the URL changes externally (back/forward
+    // navigation, shared links with ?q=). Deliberate sync-in-effect.
+    setInput(urlQuery);
+  }, [urlQuery]);
+  const query = urlQuery.trim().toLowerCase();
+  const searched = query
+    ? shown.filter(
+        (b) =>
+          b.issueRef.toLowerCase().includes(query) ||
+          (bountyPackage(b) ?? "").toLowerCase().includes(query),
+      )
+    : shown;
 
   return (
     <>
@@ -44,6 +74,25 @@ export function BountyList() {
       <section className="board">
         <div className="board-head">
           <h2>Bounty board</h2>
+          <form className="board-search" role="search" onSubmit={(e) => e.preventDefault()}>
+            <input
+              type="search"
+              aria-label="Search bounties by finding text"
+              placeholder="Search by package or finding…"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+            />
+            {input && (
+              <button
+                type="button"
+                className="chip"
+                aria-label="Clear search"
+                onClick={() => setInput("")}
+              >
+                Clear
+              </button>
+            )}
+          </form>
           <div className="chips" role="tablist" aria-label="Filter by status">
             {FILTERS.map((f) => {
               const count = f.status ? bounties.filter((b) => b.status === f.status).length : bounties.length;
@@ -73,7 +122,7 @@ export function BountyList() {
         )}
         {state.status === "error" && <ErrorState error={state.error} onRetry={state.reload} />}
         {state.status === "success" &&
-          (shown.length === 0 ? (
+          (searched.length === 0 ? (
             bounties.length === 0 ? (
               <Empty>
                 <div className="empty-cta">
@@ -95,12 +144,14 @@ export function BountyList() {
                   </ul>
                 </div>
               </Empty>
+            ) : query ? (
+              <Empty>{`No bounties match “${urlQuery.trim()}”${filter.status ? ` in ${filter.label.toLowerCase()}` : ""}.`}</Empty>
             ) : (
               <Empty>{`No ${filter.label.toLowerCase()} bounties right now.`}</Empty>
             )
           ) : (
             <div className="grid">
-              {shown.map((b) => (
+              {searched.map((b) => (
                 <BountyCard key={b.id} bounty={b} />
               ))}
             </div>

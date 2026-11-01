@@ -10,6 +10,46 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Copy-to-clipboard on addresses — #133
+
+- **What:** `AddressLink` gains an optional `copy` prop that renders a
+  `CopyButton` next to the address. Enabled on the funder address (bounty
+  detail header), the token contract address, and the claimant address in
+  timeline claim/paid entries.
+- **Tests:** Existing `ui.test.tsx` covers CopyButton; address rendering
+  unchanged when `copy` is not set.
+- **By:** Hermes agent (Fuma2514)
+- **Closes:** #133
+- **Status:** Ready for review.
+
+### Manual light/dark theme toggle — #135
+
+- **What:** `useTheme` hook in Layout: a `☀️/🌙` toggle in the topbar switches
+  `<html data-theme="light">`; a `[data-theme="light"]` token override block
+  in `index.css` re-skins the palette. Choice persists in
+  `localStorage["depradar-theme"]`, dark remains the default (no attribute),
+  and a throwing `localStorage` (private mode) degrades to session-only.
+- **Tests:** New `Layout.test.tsx` (6 tests): default dark, switch+persist,
+  restore on remount, toggle back, throwing-storage fallback, hook read.
+  Frontend suite: 62/62 passing across 10 files.
+- **By:** Hermes agent (Fuma2514)
+- **Closes:** #135
+- **Status:** Ready for review.
+
+### Bounty board search by finding text — #122
+
+- **What:** Adds a search box to the bounty board: case-insensitive substring
+  match over each bounty's issue reference and structured package name
+  (`bountyPackage`), debounced 150 ms into the `q` URL parameter (shareable
+  views, composable with the status filter), a clear button, and a dedicated
+  no-matches message.
+- **Tests:** New `src/pages/BountyList.test.tsx` covers empty-query pass-through,
+  debouncing, case-insensitive matching by reference and by package name, the
+  no-matches message and the clear button. Full frontend suite: 56 passing.
+- **By:** Hermes agent
+- **Closes:** #122
+- **Status:** Ready for review.
+
 ### Dependency licenses and sources — `cargo deny` — #163
 
 - **What:** Adds [`deny.toml`](deny.toml) allowing MIT, Apache-2.0, BSD,
