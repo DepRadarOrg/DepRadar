@@ -41,6 +41,8 @@ export function BountyList() {
   useEffect(() => {
     // Keep the input in sync when the URL changes externally (back/forward
     // navigation, shared links with ?q=). Deliberate sync-in-effect.
+    /* eslint-disable-next-line react(set-state-in-effect) -- intentional URL→input sync; oxlint reads plain eslint-disable too */
+    // oxlint-disable-next-line
     setInput(urlQuery);
   }, [urlQuery]);
   const query = urlQuery.trim().toLowerCase();
