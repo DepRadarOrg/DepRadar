@@ -10,6 +10,20 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Bounty board search by finding text — #122
+
+- **What:** Adds a search box to the bounty board: case-insensitive substring
+  match over each bounty's issue reference and structured package name
+  (`bountyPackage`), debounced 150 ms into the `q` URL parameter (shareable
+  views, composable with the status filter), a clear button, and a dedicated
+  no-matches message.
+- **Tests:** New `src/pages/BountyList.test.tsx` covers empty-query pass-through,
+  debouncing, case-insensitive matching by reference and by package name, the
+  no-matches message and the clear button. Full frontend suite: 56 passing.
+- **By:** Hermes agent
+- **Closes:** #122
+- **Status:** Ready for review.
+
 ### Dependency licenses and sources — `cargo deny` — #163
 
 - **What:** Adds [`deny.toml`](deny.toml) allowing MIT, Apache-2.0, BSD,

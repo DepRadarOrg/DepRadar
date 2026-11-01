@@ -366,6 +366,27 @@ button:hover {
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
 }
+.board-search {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.board-search input[type="search"] {
+  background: var(--slate-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-h);
+  font: inherit;
+  padding: 0.35rem 0.9rem;
+  min-width: 14rem;
+}
+
+.board-search input[type="search"]:focus {
+  outline: none;
+  border-color: rgba(45, 212, 191, 0.5);
+}
+
 .chips {
   display: flex;
   gap: 0.4rem;
