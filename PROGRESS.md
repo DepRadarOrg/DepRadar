@@ -10,6 +10,21 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Docs — FAQ — #<this issue>
+
+- **What:** Adds [`docs/FAQ.md`](docs/FAQ.md) with at least ten common
+  questions answered from the README, the contract and
+  [`SECURITY.md`](SECURITY.md): whether the deployment is mainnet or
+  testnet, who decides bounty claims, what counts as a finding, how
+  bounties are funded, released and refunded, and how to report a
+  vulnerability. The README now links to it.
+- **Verified:** every command and link in the new docs was checked against
+  the repo; the README link resolves to `docs/FAQ.md`.
+- **By:** CodePrincess360
+- **Closes:** #<this issue>
+- **Status:** In review.
+
+
 ### Dependency licenses and sources — `cargo deny` — #163
 
 - **What:** Adds [`deny.toml`](deny.toml) allowing MIT, Apache-2.0, BSD,
