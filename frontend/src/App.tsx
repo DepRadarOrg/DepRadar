@@ -1,4 +1,5 @@
 import { HashRouter, Route, Routes } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Layout } from "./components/Layout";
 import { Empty } from "./components/ui";
@@ -8,6 +9,7 @@ import { BountyList } from "./pages/BountyList";
 
 /** Hash routing so the build works on any static host with no rewrite rules. */
 export default function App() {
+  const { t } = useTranslation();
   return (
     <ErrorBoundary>
       <HashRouter>
@@ -16,7 +18,7 @@ export default function App() {
             <Route index element={<BountyList />} />
             <Route path="bounty/:id" element={<BountyDetail />} />
             <Route path="about" element={<About />} />
-            <Route path="*" element={<Empty>Page not found.</Empty>} />
+            <Route path="*" element={<Empty>{t("app.notFound")}</Empty>} />
           </Route>
         </Routes>
       </HashRouter>

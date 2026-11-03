@@ -1,10 +1,13 @@
 import { useEffect } from "react";
+import { useTranslation, Trans } from "react-i18next";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { CONTRACT_ID, NETWORK, explorer } from "../config";
 import { shortAddress } from "../lib/format";
+import { LanguageSelector } from "./LanguageSelector";
 
 export function Layout() {
   const { pathname } = useLocation();
+  const { t } = useTranslation();
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
@@ -22,8 +25,9 @@ export function Layout() {
           </Link>
           <nav className="topbar-meta">
             <Link to="/about" className="btn btn-ghost">
-              About
+              {t("nav.about")}
             </Link>
+            <LanguageSelector />
             <span className="net">
               <span className="live-dot" aria-hidden />
               {NETWORK}
@@ -32,7 +36,7 @@ export function Layout() {
               {shortAddress(CONTRACT_ID)}
             </a>
             <a className="btn btn-ghost" href="https://github.com/DepRadarOrg/DepRadar" target="_blank" rel="noreferrer">
-              GitHub
+              {t("nav.github")}
             </a>
           </nav>
         </div>
@@ -42,9 +46,9 @@ export function Layout() {
       </main>
       <footer className="footer">
         <span>
-          Read-only view of the <code>deprader_router</code> contract — nothing here signs or submits transactions.
+          <Trans i18nKey="footer.readOnly" components={[<code />]} />
         </span>
-        <span className="muted">MIT · Built on Stellar Soroban</span>
+        <span className="muted">{t("footer.built")}</span>
       </footer>
     </div>
   );
