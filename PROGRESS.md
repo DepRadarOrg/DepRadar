@@ -10,6 +10,18 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### CI — CodeQL analysis for TypeScript code — #153
+
+- **What:** Adds [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml)
+  running CodeQL static application security testing for `javascript-typescript`
+  covering `client/` and `frontend/`. Triggers on push to `main`, pull requests targeting
+  `main`, and a weekly scheduled cron (Mondays at 06:00 UTC).
+- **Verified:** Workflow syntax and permissions validated for GitHub Actions;
+  configured with `security-extended` and `security-and-quality` queries.
+- **By:** camesenin
+- **Closes:** #153
+- **Status:** In review.
+
 ### Docs — FAQ — #<this issue>
 
 - **What:** Adds [`docs/FAQ.md`](docs/FAQ.md) with at least ten common
