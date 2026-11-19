@@ -10,6 +10,14 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Docs — Module README for `src/behavioral/` — #454
+
+- **What:** Adds [`src/behavioral/README.md`](src/behavioral/README.md) documenting each behavioral detector (`scripts`, `network`, `setup_py`, `binaries`, `obfuscation`, `diff`, `tarball`), detailing its analyzed files, heuristic weights/signals, and severity levels consistent with `docs/severity.md`.
+- **Verified:** Every detector description, heuristic weight, constant, and link was verified against `src/behavioral/*.rs` and `docs/severity.md`.
+- **By:** genda-benjamin
+- **Closes:** #454
+- **Status:** In review.
+
 ### Docs — FAQ — #<this issue>
 
 - **What:** Adds [`docs/FAQ.md`](docs/FAQ.md) with at least ten common
