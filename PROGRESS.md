@@ -10,6 +10,14 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Docs — Contract error codes reference — #449
+
+- **What:** Adds [`docs/contract-errors.md`](docs/contract-errors.md) documenting every `Error` variant, numeric error code, trigger condition, and resolution from [`contracts/deprader_router/src/lib.rs`](contracts/deprader_router/src/lib.rs). Also details contract constants for bounds and deadlines.
+- **Verified:** Every error code, constant, and link was verified against `contracts/deprader_router/src/lib.rs`.
+- **By:** genda-benjamin
+- **Closes:** #449
+- **Status:** In review.
+
 ### Docs — FAQ — #<this issue>
 
 - **What:** Adds [`docs/FAQ.md`](docs/FAQ.md) with at least ten common
