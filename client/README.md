@@ -14,6 +14,9 @@ Default contract ID: `CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ`
 npm install
 npm start                      # defaults to bounty-id 1
 npm start -- --bounty-id 2
+npm start -- --all             # prints every bounty 1..=bounty_count
+npm start -- --json            # outputs single JSON document to stdout
+npm start -- --all --json      # outputs all bounties as a JSON array
 ```
 
 Bounty `1` is real on-chain data: the `create_bounty` -> `submit_claim`
@@ -23,21 +26,97 @@ claim. Bounty `2` was cancelled and refunded. An unknown ID prints
 `(no bounty with this ID)` rather than erroring, since `get_bounty` returns
 `None` for unknown IDs on-chain.
 
-## Configuration
+## Options & Flags
 
-The contract ID and RPC endpoint can be overridden without editing code, so
-the client can be pointed at another deployment.
-
-| Setting     | Flag         | Environment variable     | Default                                                        |
-| ----------- | ------------ | ------------------------ | -------------------------------------------------------------- |
-| Contract ID | `--contract` | `DEPRADAR_CONTRACT_ID`   | `CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ`     |
-| RPC URL     | `--rpc`      | `DEPRADAR_RPC_URL`       | `https://soroban-testnet.stellar.org`                          |
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--bounty-id <id>` | Specific bounty ID to fetch | `1` |
+| `--all` | Fetch every bounty (`1..=bounty_count`) and its claims | `false` |
+| `--json` | Output pure JSON to stdout instead of human-readable text | `false` |
+| `--contract <id>` | Target contract ID (env: `DEPRADAR_CONTRACT_ID`) | Built-in testnet contract |
+| `--rpc <url>` | Target Soroban RPC URL (env: `DEPRADAR_RPC_URL`) | `https://soroban-testnet.stellar.org` |
 
 Precedence is **flag > environment variable > default**: a flag always wins,
 otherwise the environment variable is used if set, otherwise the built-in
 default applies.
 
-### Examples
+## Output Examples
+
+### Single Bounty with `--json`
+
+```bash
+npm start -- --bounty-id 1 --json
+```
+
+```json
+{
+  "bountyId": 1,
+  "bounty": {
+    "amount": "50000000",
+    "claim_count": 2,
+    "created_at": "1791546147",
+    "creator": "GCFFP6RU6C3JOZBIUNZN2ELJAITUZ3HWEOUUCFXIAHE6M2GHVHZB4D6A",
+    "deadline": "1794138138",
+    "issue_ref": "npm:expresss typosquat of express (demo)",
+    "pending_claims": 0,
+    "status": {
+      "tag": "Released"
+    },
+    "token": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+  },
+  "claims": [
+    {
+      "claimant": "GC2OYUR53G6IHMRXS2IH2WV3ANIXHIKXM3OJRXSDKESMLEYEOXQN4BLY",
+      "proof_ref": "junk",
+      "status": {
+        "tag": "Rejected"
+      },
+      "submitted_at": "1791546157"
+    },
+    {
+      "claimant": "GDLSO26NR37KTXN5KO4TVG53TDEWAYSXIT2CXZZ6VHS2BZB2FEP2J2VW",
+      "proof_ref": "DepRadarOrg/DepRadar#demo-report",
+      "status": {
+        "tag": "Accepted"
+      },
+      "submitted_at": "1791546167"
+    }
+  ]
+}
+```
+
+### All Bounties with `--all --json`
+
+```bash
+npm start -- --all --json
+```
+
+```json
+[
+  {
+    "bountyId": 1,
+    "bounty": {
+      "amount": "50000000",
+      "claim_count": 2,
+      "status": { "tag": "Released" },
+      ...
+    },
+    "claims": [ ... ]
+  },
+  {
+    "bountyId": 2,
+    "bounty": {
+      "amount": "20000000",
+      "claim_count": 1,
+      "status": { "tag": "Cancelled" },
+      ...
+    },
+    "claims": [ ... ]
+  }
+]
+```
+
+### Overriding Contract and RPC
 
 ```bash
 # Override both via flags
@@ -48,6 +127,4 @@ DEPRADAR_CONTRACT_ID=<CONTRACT_ID> DEPRADAR_RPC_URL=<RPC_URL> npm start
 
 # Flags take precedence over environment variables
 DEPRADAR_CONTRACT_ID=<IGNORED_ID> npm start -- --contract <CONTRACT_ID>
-
-# Combine with other options
-npm start -- --bounty-id 2 --contract <CONTRACT_ID> --rpc <RPC_URL>
+```

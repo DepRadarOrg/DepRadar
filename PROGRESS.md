@@ -10,6 +10,13 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Client — `--json` and `--all` flags for the read client — #143
+
+- **What:** Extended `client/src/index.ts` to support `--all` (iterating through all bounties `1..=bounty_count` and their claims) and `--json` (emitting a pure JSON document to stdout without human-readable log messages). Updated `client/README.md` with flag documentation, usage examples, and sample JSON outputs.
+- **Verified:** `npm run typecheck` passes in `client/` (`tsc --noEmit`), and executed against Soroban testnet verifying `--json`, `--all`, and `--all --json` output.
+- **Closes:** #143 (@genda-benjamin)
+
+
 ### Docs — Architecture guide with sequence diagrams — #155
 
 - **What:** Adds [`docs/architecture.md`](docs/architecture.md) with Mermaid
