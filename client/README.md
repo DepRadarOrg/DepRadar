@@ -51,3 +51,12 @@ DEPRADAR_CONTRACT_ID=<IGNORED_ID> npm start -- --contract <CONTRACT_ID>
 
 # Combine with other options
 npm start -- --bounty-id 2 --contract <CONTRACT_ID> --rpc <RPC_URL>
+```
+
+## Testing
+
+```bash
+npm test
+```
+
+Runs the unit test suite via Vitest, covering argument parsing (`parseArgs`), environment variable fallbacks, invalid ID handling, and output formatters.

@@ -79,7 +79,7 @@ jobs:
           done
 
   client:
-    name: client typecheck
+    name: client (typecheck, test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -93,6 +93,7 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
 
   frontend:
     name: frontend (lint, typecheck, test, build)

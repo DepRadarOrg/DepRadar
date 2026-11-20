@@ -10,6 +10,12 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Client — Unit tests for the testnet read client — #144
+
+- **What:** Adds Vitest to `client/package.json` (`"test": "vitest run"`). Modularizes `client/src/index.ts` by extracting argument parsing (`parseArgs`, default constants, CLI args interface) into `client/src/args.ts` and output formatters (`formatHeader`, `formatBounty`, `formatClaim`, `bigIntReplacer`) into `client/src/format.ts`. Implements 17 comprehensive unit tests in `client/src/index.test.ts` covering defaults, custom flags, environment variable fallbacks, invalid `--bounty-id` inputs (negative integers, non-integers, non-numeric strings, missing values), and BigInt serialization formatting. Updates `.github/workflows/ci.yml` so the `client` CI job runs `npm test` alongside `npm run typecheck`, and adds testing documentation to `client/README.md`.
+- **Verified:** `npm run typecheck` passes with 0 errors (`tsc --noEmit`). `npm test` passes 17/17 tests green.
+- **Closes:** #144
+
 ### Docs — Architecture guide with sequence diagrams — #155
 
 - **What:** Adds [`docs/architecture.md`](docs/architecture.md) with Mermaid
