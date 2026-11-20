@@ -10,6 +10,16 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### CI — CodeQL analysis for the TypeScript code — #153
+
+- **What:** Adds [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml),
+  which runs CodeQL (`javascript-typescript`, `security-extended` queries)
+  over `client/` and `frontend/` on push to `main`, on pull requests, weekly
+  (Monday 05:00 UTC) and on demand. Uses `build-mode: none`, so no build step
+  is needed, and requests only the permissions CodeQL requires.
+- **Closes:** #153
+- **Status:** In review.
+
 ### Docs — Architecture guide with sequence diagrams — #155
 
 - **What:** Adds [`docs/architecture.md`](docs/architecture.md) with Mermaid
