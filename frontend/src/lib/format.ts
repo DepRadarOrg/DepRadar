@@ -101,3 +101,35 @@ export function parseIssueRef(ref: string): IssueRef | null {
 
   return { ecosystem, package: pkg, version, kind: kind as IssueKind, detail };
 }
+
+/**
+ * Resolves a reference or URL string into a linkable web URL.
+ * - Strict `https://` URLs are returned as-is.
+ * - `owner/repo#N` GitHub issue references are expanded to `https://github.com/owner/repo/issues/N`.
+ * - Anything else (e.g. `javascript:`, `http:`, raw text, malformed refs) returns null.
+ */
+export function refToUrl(ref: string): string | null {
+  if (typeof ref !== "string" || ref.length === 0) return null;
+  if (/\s/.test(ref)) return null;
+
+  try {
+    const url = new URL(ref);
+    if (url.protocol === "https:" && /^https:\/\//i.test(ref)) {
+      return ref;
+    }
+    if (ref.includes(":")) return null;
+  } catch {
+    if (ref.includes(":")) return null;
+  }
+
+  const m = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#([1-9][0-9]*)$/.exec(ref);
+  if (!m) return null;
+
+  const [, owner, repo, num] = m;
+  if (owner === "." || owner === ".." || repo === "." || repo === "..") {
+    return null;
+  }
+
+  return `https://github.com/${owner}/${repo}/issues/${num}`;
+}
+

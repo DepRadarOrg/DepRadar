@@ -4,7 +4,7 @@ import { ScannerDetection } from "../components/ScannerDetection";
 import { AddressLink, CopyButton, Empty, ErrorState, Identicon, Skeleton, StatusBadge } from "../components/ui";
 import { NATIVE_XLM_SAC } from "../config";
 import { getBounty, listClaims } from "../lib/contract";
-import { formatAmount, formatDate, relativeTime, splitIssueRef, tokenSymbol } from "../lib/format";
+import { formatAmount, formatDate, refToUrl, relativeTime, splitIssueRef, tokenSymbol } from "../lib/format";
 import { bountyTimeline, type TimelineEvent } from "../lib/insights";
 import { bountyPackage } from "../lib/typosquat";
 import type { Bounty, Claim } from "../lib/types";
@@ -103,7 +103,13 @@ function Detail({ bounty, claims }: { bounty: Bounty; claims: Claim[] }) {
             <div>
               <dt>{t("bounty.findingRef")}</dt>
               <dd className="ref">
-                <code>{bounty.issueRef}</code>
+                {refToUrl(bounty.issueRef) ? (
+                  <a href={refToUrl(bounty.issueRef)!} target="_blank" rel="noreferrer">
+                    <code>{bounty.issueRef}</code>
+                  </a>
+                ) : (
+                  <code>{bounty.issueRef}</code>
+                )}
                 <CopyButton value={bounty.issueRef} />
               </dd>
             </div>
@@ -136,7 +142,15 @@ function TimelineItem({ event }: { event: TimelineEvent }) {
             <Identicon address={event.claim.claimant} />
             <div>
               <AddressLink address={event.claim.claimant} />
-              <p className="proof">{event.claim.proofRef}</p>
+              {refToUrl(event.claim.proofRef) ? (
+                <p className="proof">
+                  <a href={refToUrl(event.claim.proofRef)!} target="_blank" rel="noreferrer">
+                    {event.claim.proofRef}
+                  </a>
+                </p>
+              ) : (
+                <p className="proof">{event.claim.proofRef}</p>
+              )}
             </div>
           </div>
         )}

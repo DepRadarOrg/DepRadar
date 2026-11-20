@@ -10,6 +10,13 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Frontend — Render `proof_ref` and `issue_ref` as links — #140
+
+- **What:** Implemented `refToUrl` in `frontend/src/lib/format.ts` to convert valid `https://` URLs (as-is) and GitHub shorthand references (`owner/repo#N`) into clickable links pointing to GitHub issues, while strictly rejecting non-https schemes (http, ftp, file, data, blob) and XSS vectors (`javascript:`, `vbscript:`). Updated `BountyDetail.tsx` to render clickable anchor tags with `target="_blank" rel="noreferrer"` for finding references and claim proof references. Added 83 comprehensive unit tests in `frontend/src/lib/format.test.ts`.
+- **Verified:** `npm run lint` (0 warnings, 0 errors), `npm run typecheck` (tsc -b passed), `npm test` (8/8 test files, 122/122 tests passed), and `npm run build` succeeds cleanly.
+- **Closes:** #140 (@genda-benjamin)
+
+
 ### Docs — Architecture guide with sequence diagrams — #155
 
 - **What:** Adds [`docs/architecture.md`](docs/architecture.md) with Mermaid
