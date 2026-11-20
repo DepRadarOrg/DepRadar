@@ -10,6 +10,7 @@
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "preview": "vite preview",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium"
@@ -33,6 +34,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^5.1.0",
     "jsdom": "^29.1.1",
     "oxlint": "^1.94.0",
     "typescript": "~6.0.2",

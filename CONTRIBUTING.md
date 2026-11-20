@@ -57,6 +57,21 @@ palette.
 Prerequisites: a stable Rust toolchain, the `wasm32v1-none` target (for the
 contract), and Node.js 22+ (for `client/`).
 
+The repo ships a [`justfile`](justfile) with the common tasks. Install
+[`just`](https://github.com/casey/just#installation) (`cargo install just`,
+`brew install just`, or your package manager), then run `just --list` to see
+every recipe. The main ones:
+
+| Recipe | What it does |
+| --- | --- |
+| `just check` | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo test --workspace --locked` — the same checks CI runs. |
+| `just wasm` | Builds the contract (`deprader-router`) and the typosquat scanner (`typosquat-wasm`) to wasm. |
+| `just fe` | Installs frontend dependencies and starts the Vite dev server at http://localhost:5173. |
+| `just fe-check` | Runs the frontend `lint`, `typecheck`, `test`, and `build` steps. |
+| `just scan <name>` | Runs the typosquat scanner against a package name, e.g. `just scan expresss`. |
+
+The equivalent raw commands, if you'd rather run them by hand:
+
 ```bash
 rustup target add wasm32v1-none
 

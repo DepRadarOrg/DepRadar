@@ -5,6 +5,7 @@
 **A decentralized security scanner for open-source dependency graphs — funded bounties, not empty advisories.**
 
 [![CI](https://github.com/DepRadarOrg/DepRadar/actions/workflows/ci.yml/badge.svg)](https://github.com/DepRadarOrg/DepRadar/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-Rust%20%2B%20frontend-blue)](https://github.com/DepRadarOrg/DepRadar/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Network](https://img.shields.io/badge/network-Stellar%20Testnet-blue)](https://stellar.expert/explorer/testnet/contract/CCPRQANY467KKE4ROKCNW6TH3LY3EPVFRXIXJ5V4VCYHLJKWZPOZYQJQ)
 

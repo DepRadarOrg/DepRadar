@@ -972,6 +972,59 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** #165
 - **Status:** In review.
 
+### CI — code coverage for Rust and frontend — #150
+
+- **What:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) gains a
+  `coverage` job that runs `cargo llvm-cov --workspace --lcov --output-path
+  lcov.info` and uploads `lcov.info` as an artifact, and the `frontend` job
+  now runs `vitest --coverage` (via `npm run test:coverage`) and uploads the
+  `frontend/coverage/` directory as an artifact. `frontend/package.json`
+  gains the `test:coverage` script and the `@vitest/coverage-v8` dev
+  dependency. The README shows a coverage badge.
+- **Verified:** the workflow runs green on the PR and the coverage numbers
+  appear in the PR's CI run; both artifacts are downloadable from the run.
+- **Closes:** #150
+- **Status:** In review.
+
+### DevEx — `justfile` with common tasks — #151
+
+- **What:** Adds a [`justfile`](justfile) with `just check` (fmt, clippy,
+  tests), `just wasm` (release wasm build of the router), `just fe`
+  (frontend dev server), `just fe-check` (frontend lint, typecheck, tests
+  and build) and `just scan <name>` (typosquat scan of a package name).
+  `CONTRIBUTING.md` documents `just --list` and the recipes.
+- **Verified:** every recipe runs successfully locally (Linux); all
+  commands and links in the new docs were checked.
+- **Closes:** #151
+- **Status:** In review.
+
+### CI — changelog and tagged releases with git-cliff — #152
+
+- **What:** Adds [`cliff.toml`](cliff.toml) configuring git-cliff for
+  conventional commits, a [`CHANGELOG.md`](CHANGELOG.md) generated from the
+  full existing history, and [`.github/workflows/release.yml`](.github/workflows/release.yml)
+  gains a release job that runs on `v*` tags and creates a GitHub Release
+  whose body is the changelog section for that tag.
+- **Verified:** the generated changelog covers all existing history and the
+  workflow runs green on the PR; all commands and links in the new docs were
+  checked.
+- **Closes:** #152
+- **Status:** In review.
+
+### Contract — fix build: `DataKey::Reviewer` and ecosystem length check — #277
+
+- **What:** `contracts/deprader_router/src/lib.rs` gains the
+  `DataKey::Reviewer(Address)` storage key plus admin functions to grant and
+  revoke the reviewer role, and stores `ecosystem` as a `String` so
+  `check_metadata` can validate its length (a `Symbol` has no `.len()`).
+  `contracts/deprader_router/src/test.rs` covers granting a reviewer and
+  rejecting an over-long ecosystem.
+- **Verified:** `cargo build -p deprader-router --target wasm32v1-none
+  --release` succeeds; `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass; contract snapshots updated.
+- **Closes:** #277
+- **Status:** In review.
+
 ### Frontend — render `proof_ref` and `issue_ref` as links — #140
 
 - **What:** Adds `refToUrl(ref)` to

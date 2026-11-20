@@ -90,19 +90,53 @@ jobs:
           path: '*.cdx.json'
           if-no-files-found: error
 
+  changelog:
+    name: Extract changelog section
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate changelog for tag
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --verbose --latest --strip header
+        env:
+          OUTPUT: CHANGELOG_SECTION.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGELOG_SECTION.md
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
-    needs: [build, sbom]
+    needs: [build, sbom, changelog]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: changelog
+      - name: Read changelog section
+        id: changelog
+        shell: bash
+        run: |
+          {
+            echo 'body<<CHANGELOG_EOF'
+            cat changelog/CHANGELOG_SECTION.md
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.body }}
           prerelease: ${{ contains(github.ref_name, 'dry-run') }}
           make_latest: ${{ !contains(github.ref_name, 'dry-run') }}

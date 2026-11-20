@@ -17,7 +17,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, Env,
-    IntoVal, String, Symbol, TryFromVal, Val,
+    IntoVal, String, TryFromVal, Val,
 };
 
 /// Ledgers per day at Stellar's ~5s close time.
@@ -85,7 +85,7 @@ pub struct Bounty {
     pub creator: Address,
     pub issue_ref: String,
     /// Optional ecosystem the finding belongs to (e.g. `soroban`).
-    pub ecosystem: Option<Symbol>,
+    pub ecosystem: Option<String>,
     /// Optional package name the finding affects.
     pub package: Option<String>,
     /// Optional severity score for the finding.
@@ -134,6 +134,8 @@ enum DataKey {
     AllowedToken(Address),
     MinAmount(Address),
     Paused,
+    /// Addresses allowed to review claims alongside the admin.
+    Reviewer(Address),
     /// Admin-configured address that receives Drips streamed funds.
     PoolAddress,
     /// Pool balance per token, tracked so bounties can be opened from it.
@@ -247,6 +249,34 @@ impl DepRaderRouter {
 
     pub fn get_pending_admin(env: Env) -> Option<Address> {
         env.storage().instance().get(&DataKey::PendingAdmin)
+    }
+
+    /// Admin-only: grants `reviewer` the right to reject and release claims.
+    pub fn add_reviewer(env: Env, reviewer: Address) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        set_persistent(&env, &DataKey::Reviewer(reviewer.clone()), &true);
+        env.events()
+            .publish((symbol_short!("rev_add"),), (reviewer, admin));
+        Ok(())
+    }
+
+    /// Admin-only: revokes a reviewer's rights.
+    pub fn remove_reviewer(env: Env, reviewer: Address) -> Result<(), Error> {
+        let admin = require_admin(&env)?;
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Reviewer(reviewer.clone()));
+        env.events()
+            .publish((symbol_short!("rev_rem"),), (reviewer, admin));
+        Ok(())
+    }
+
+    /// Returns whether `reviewer` is currently allowed to review claims.
+    pub fn is_reviewer(env: Env, reviewer: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Reviewer(reviewer))
+            .unwrap_or(false)
     }
 
     /// Returns the contract's limits so front ends don't hard-code them.
@@ -491,7 +521,7 @@ impl DepRaderRouter {
         env: Env,
         creator: Address,
         issue_ref: String,
-        ecosystem: Option<Symbol>,
+        ecosystem: Option<String>,
         package: Option<String>,
         severity: Option<u32>,
         amount: i128,
@@ -1117,9 +1147,9 @@ fn check_ref(r: &String) -> Result<(), Error> {
 }
 
 /// Validates the optional structured finding metadata on a bounty.
-fn check_metadata(ecosystem: &Option<Symbol>, package: &Option<String>) -> Result<(), Error> {
-    if let Some(sym) = ecosystem {
-        if sym.len() == 0 || sym.len() > MAX_ECOSYSTEM_LEN {
+fn check_metadata(ecosystem: &Option<String>, package: &Option<String>) -> Result<(), Error> {
+    if let Some(eco) = ecosystem {
+        if eco.is_empty() || eco.len() > MAX_ECOSYSTEM_LEN {
             return Err(Error::InvalidReference);
         }
     }
