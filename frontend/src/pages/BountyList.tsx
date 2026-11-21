@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BountyCard, BountyCardSkeleton } from "../components/BountyCard";
 import { Radar } from "../components/Radar";
 import { Empty, ErrorState, Skeleton } from "../components/ui";
-import { listBounties } from "../lib/contract";
+import { listBountiesPage, type BountyPage } from "../lib/contract";
 import { formatAmount } from "../lib/format";
 import { boardStats } from "../lib/insights";
 import type { Bounty, BountyStatus } from "../lib/types";
@@ -18,11 +19,37 @@ const FILTERS: { key: string; label: string; status?: BountyStatus }[] = [
 
 export function BountyList() {
   const { t } = useTranslation();
-  const state = useAsync(listBounties, "bounties");
+  const state = useAsync(() => listBountiesPage(), "bounties");
   const [params, setParams] = useSearchParams();
+  const [more, setMore] = useState<BountyPage[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const filter = FILTERS.find((f) => f.key === params.get("status")) ?? FILTERS[0];
-  const bounties = state.status === "success" ? state.data : [];
+
+  const firstPage = state.status === "success" ? state.data : null;
+  const bounties = firstPage ? [...firstPage.bounties, ...more.flatMap((p) => p.bounties)] : [];
+  const nextBeforeId = more.length > 0 ? more[more.length - 1].nextBeforeId : (firstPage?.nextBeforeId ?? null);
   const shown = filter.status ? bounties.filter((b) => b.status === filter.status) : bounties;
+
+  function reload() {
+    setMore([]);
+    setLoadMoreFailed(false);
+    state.reload();
+  }
+
+  async function loadMore() {
+    if (nextBeforeId === null) return;
+    setLoadingMore(true);
+    setLoadMoreFailed(false);
+    try {
+      const page = await listBountiesPage(nextBeforeId);
+      setMore((pages) => [...pages, page]);
+    } catch {
+      setLoadMoreFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <>
@@ -37,7 +64,7 @@ export function BountyList() {
           <p className="lede">
             {t("hero.lede")}
           </p>
-          <HeroStats bounties={state.status === "success" ? state.data : null} />
+          <HeroStats bounties={firstPage ? bounties : null} />
         </div>
         <Radar bounties={bounties} />
       </section>
@@ -72,7 +99,7 @@ export function BountyList() {
             ))}
           </div>
         )}
-        {state.status === "error" && <ErrorState error={state.error} onRetry={state.reload} />}
+        {state.status === "error" && <ErrorState error={state.error} onRetry={reload} />}
         {state.status === "success" &&
           (shown.length === 0 ? (
             bounties.length === 0 ? (
@@ -103,6 +130,18 @@ export function BountyList() {
               ))}
             </div>
           ))}
+        {state.status === "success" && nextBeforeId !== null && (
+          <div className="load-more">
+            {loadMoreFailed && (
+              <p className="muted" role="alert">
+                {t("board.loadMoreError")}
+              </p>
+            )}
+            <button type="button" className="btn btn-ghost" onClick={loadMore} disabled={loadingMore}>
+              {loadingMore ? t("board.loadingMore") : t("board.loadMore")}
+            </button>
+          </div>
+        )}
       </section>
     </>
   );

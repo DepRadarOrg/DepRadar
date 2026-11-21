@@ -10,6 +10,57 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Frontend — Submit-claim form on the bounty page — #127
+
+- **What:** On open bounties, the bounty page shows a "Submit claim" form with
+  a proof reference. The form is disabled with an explanation when the wallet
+  is not connected, is on the wrong network, is the bounty's creator, the
+  deadline has passed, or the wallet already has a claim (`get_claim_id`).
+  Submitting builds, signs and submits `submit_claim` as the connected wallet,
+  then reloads the bounty and its claims. Shared write path: `frontend/src/lib/tx.ts`.
+- **Verified:** Not run; no tests, lint, typecheck or build were executed for
+  this change. No testnet transaction hash is recorded.
+- **By:** olivia-brien
+- **Closes:** #127
+
+### Frontend — Create-bounty form — #126
+
+- **What:** Adds `/new`, a form for a finding reference, a reward in XLM, and
+  a deadline date (at most one year out). Submitting builds and simulates
+  `create_bounty` as the connected Freighter wallet, signs it, submits it,
+  waits for confirmation, then opens the new bounty. Validation in
+  `frontend/src/lib/newBounty.ts` mirrors the contract: amount > 0, reference
+  1–256 bytes, deadline within one year. The shared write path is
+  `frontend/src/lib/tx.ts`. The reward is paid in native XLM.
+- **Verified:** Not run; no tests, lint, typecheck or build were executed for
+  this change. No testnet transaction hash is recorded.
+- **By:** olivia-brien
+- **Closes:** #126
+
+### Frontend — Connect a Freighter wallet — #125
+
+- **What:** Adds `@stellar/freighter-api` and a `WalletProvider` / `useWallet()`
+  context in `frontend/src/wallet/`. The top bar has a Connect button that shows
+  the short address and network once connected, and warns when the wallet's
+  network differs from `NETWORK`. An already-approved site reconnects on load;
+  if the extension is missing the button links to Freighter instead.
+- **Verified:** Not run; no tests, lint, typecheck or build were executed for
+  this change.
+- **By:** olivia-brien
+- **Closes:** #125
+
+### Frontend — Paginate the bounty list — #124
+
+- **What:** The dashboard now loads 20 bounties at a time, newest first, with
+  a "Load more" button. `listBountiesPage()` in `frontend/src/lib/contract.ts`
+  pages over bounty IDs until the contract exposes a paginated getter. The
+  status filter, chip counts, hero stats and radar apply to the bounties
+  loaded so far.
+- **Verified:** Not run; no tests, lint, typecheck or build were executed for
+  this change.
+- **By:** olivia-brien
+- **Closes:** #124
+
 ### CI — Guard against conflict markers and pasted code fences — #282
 
 - **What:** Adds `scripts/check-source.sh`, a small Bash script that greps

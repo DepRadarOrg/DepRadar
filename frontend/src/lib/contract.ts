@@ -4,11 +4,8 @@
  * is needed.
  */
 import { rpc } from "@stellar/stellar-sdk";
-import { parseBounty, parseClaim } from "@deprader/contract-types";
 import { CONTRACT_ID, NETWORK, RPC_URL } from "../config";
-import type { Bounty, Claim } from "./types";
-
-export { parseBounty, parseClaim };
+import type { Bounty, BountyStatus, Claim, ClaimStatus } from "./types";
 
 /** Contract address and network, exposed for display (e.g. the About page). */
 export { CONTRACT_ID, NETWORK };
@@ -20,7 +17,52 @@ async function query(method: string, args: Record<string, unknown> = {}): Promis
   return result;
 }
 
+/** Contract enums decode as either `"Open"` or `{ tag: "Open" }` depending on SDK version. */
+function enumTag(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "tag" in value) return String((value as { tag: unknown }).tag);
+  throw new Error(`Unexpected enum value: ${JSON.stringify(value)}`);
+}
+
 type Raw = Record<string, unknown>;
+
+/** Optional contract fields decode as `undefined`/`null` when absent. */
+function optionalString(value: unknown): string | undefined {
+  return value == null ? undefined : String(value);
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return value == null ? undefined : Number(value);
+}
+
+export function parseBounty(id: number, raw: Raw): Bounty {
+  return {
+    id,
+    creator: String(raw.creator),
+    issueRef: String(raw.issue_ref),
+    amount: BigInt(raw.amount as bigint | number | string),
+    token: String(raw.token),
+    status: enumTag(raw.status) as BountyStatus,
+    createdAt: Number(raw.created_at),
+    deadline: Number(raw.deadline),
+    claimCount: Number(raw.claim_count),
+    pendingClaims: Number(raw.pending_claims),
+    ecosystem: optionalString(raw.ecosystem),
+    package: optionalString(raw.package),
+    severity: optionalNumber(raw.severity),
+  };
+}
+
+export function parseClaim(bountyId: number, id: number, raw: Raw): Claim {
+  return {
+    bountyId,
+    id,
+    claimant: String(raw.claimant),
+    proofRef: String(raw.proof_ref),
+    submittedAt: Number(raw.submitted_at),
+    status: enumTag(raw.status) as ClaimStatus,
+  };
+}
 
 /** Address of the current contract admin. */
 export async function getAdmin(): Promise<string> {
@@ -53,6 +95,36 @@ export async function listBounties(): Promise<Bounty[]> {
   const ids = Array.from({ length: count }, (_, i) => count - i);
   const bounties = await Promise.all(ids.map(getBounty));
   return bounties.filter((b): b is Bounty => b !== null);
+}
+
+/** Bounties per page on the dashboard. */
+export const PAGE_SIZE = 20;
+
+export interface BountyPage {
+  bounties: Bounty[];
+  /** Pass as `beforeId` to fetch the following page; `null` on the last page. */
+  nextBeforeId: number | null;
+}
+
+/**
+ * One page of bounties, newest first. Pages over IDs until the contract
+ * exposes a paginated getter. `beforeId` is exclusive; omit it for the newest page.
+ */
+export async function listBountiesPage(beforeId?: number, limit = PAGE_SIZE): Promise<BountyPage> {
+  const top = beforeId ?? (await getBountyCount()) + 1;
+  const lowest = Math.max(1, top - limit);
+  const ids = Array.from({ length: Math.max(0, top - lowest) }, (_, i) => top - 1 - i);
+  const bounties = await Promise.all(ids.map(getBounty));
+  return {
+    bounties: bounties.filter((b): b is Bounty => b !== null),
+    nextBeforeId: lowest > 1 ? lowest : null,
+  };
+}
+
+/** The claim ID `claimant` holds on a bounty, or `null` if they haven't claimed. */
+export async function getClaimId(bountyId: number, claimant: string): Promise<number | null> {
+  const raw = await query("get_claim_id", { bounty_id: bountyId, claimant });
+  return raw == null ? null : Number(raw);
 }
 
 /** Every claim on a bounty, in submission order. Claim IDs are `0..claim_count`. */
