@@ -1,20 +1,39 @@
-I need to see the current content of `frontend/src/lib/contract.ts` and `frontend/src/lib/contract.test.ts` to port the parsing code and tests. However, the task asks me to return the complete new file content for `frontend/src/lib/types.ts`.
+/** Mirrors `BountyStatus` in contracts/deprader_router/src/lib.rs. */
+export type BountyStatus = "Open" | "Released" | "Cancelled";
 
-Since the step is about creating the shared package, but the file I'm editing is `frontend/src/lib/types.ts`, I should update this file to re-export from the shared package (removing the duplicated types).
+/** Mirrors `ClaimStatus` in contracts/deprader_router/src/lib.rs. */
+export type ClaimStatus = "Pending" | "Rejected" | "Accepted";
 
-Let me create the shared package files and update `frontend/src/lib/types.ts` to re-export from it.
+/** Mirrors the contract's `Bounty` struct, with the ID attached. */
+export interface Bounty {
+  id: number;
+  creator: string;
+  issueRef: string;
+  /** Raw token amount in the token's smallest unit (stroops for XLM). */
+  amount: bigint;
+  token: string;
+  status: BountyStatus;
+  /** Unix seconds. */
+  createdAt: number;
+  /** Unix seconds. */
+  deadline: number;
+  claimCount: number;
+  pendingClaims: number;
+  /** Optional structured finding metadata: ecosystem symbol (e.g. "stellar"). */
+  ecosystem?: string;
+  /** Optional structured finding metadata: affected package name. */
+  package?: string;
+  /** Optional structured finding metadata: severity level. */
+  severity?: number;
+}
 
-Given the constraints (return only the file content for the file being edited), I'll update `frontend/src/lib/types.ts` to re-export from the shared package.
-
-```typescript
-/**
- * Contract types are now defined in the shared `@deprader/contract-types`
- * package so that `client/` and `frontend/` cannot drift. This module
- * re-exports them for backwards compatibility with existing imports.
- */
-export type {
-  Bounty,
-  BountyStatus,
-  Claim,
-  ClaimStatus,
-} from "@deprader/contract-types";
+/** Mirrors the contract's `Claim` struct, with its IDs attached. */
+export interface Claim {
+  bountyId: number;
+  id: number;
+  claimant: string;
+  proofRef: string;
+  /** Unix seconds. */
+  submittedAt: number;
+  status: ClaimStatus;
+}

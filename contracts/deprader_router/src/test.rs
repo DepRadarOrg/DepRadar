@@ -1495,3 +1495,40 @@ fn test_pool_open_bounty_rejects_invalid_amount() {
     assert_eq!(t.open("org/repo#1", -1), Err(Error::InvalidAmount));
     assert_eq!(t.pool.get_balance(), 500);
 }
+
+// ---- Resource budget regression -------------------------------------------
+//
+// Soroban caps every transaction at 100_000_000 CPU instructions and 40 MiB of
+// memory on the network. These ceilings are those network limits, so a call
+// that reaches them would fail on-chain. They are deliberately the hard limit,
+// not a tight bound: the printed numbers show how much headroom each call has,
+// and the ceilings can be lowered once the measured costs are known.
+const CPU_CEILING: u64 = 100_000_000;
+const MEM_CEILING: u64 = 40 * 1024 * 1024;
+
+/// Prints the cost of the last invocation and asserts it is under the ceilings.
+fn report_and_check_budget(env: &Env, call: &str) {
+    let budget = env.cost_estimate().budget();
+    let cpu = budget.cpu_instruction_cost();
+    let mem = budget.memory_bytes_cost();
+    println!("budget {call}: cpu_instructions={cpu} (ceiling {CPU_CEILING}), memory_bytes={mem} (ceiling {MEM_CEILING})");
+    assert!(cpu < CPU_CEILING, "{call} used {cpu} CPU instructions, ceiling is {CPU_CEILING}");
+    assert!(mem < MEM_CEILING, "{call} used {mem} memory bytes, ceiling is {MEM_CEILING}");
+}
+
+#[test]
+fn test_resource_budget_for_bounty_lifecycle() {
+    let t = setup();
+
+    t.env.cost_estimate().budget().reset_default();
+    let bounty_id = t.create();
+    report_and_check_budget(&t.env, "create_bounty");
+
+    t.env.cost_estimate().budget().reset_default();
+    let (_claimant, claim_id) = t.claim(bounty_id);
+    report_and_check_budget(&t.env, "submit_claim");
+
+    t.env.cost_estimate().budget().reset_default();
+    t.client.release(&t.admin, &bounty_id, &claim_id);
+    report_and_check_budget(&t.env, "release");
+}

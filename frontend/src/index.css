@@ -957,3 +957,31 @@ a.card:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Bounty board search */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.search-input {
+  min-width: 14rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  color: var(--text-h);
+  font: inherit;
+}
+.search-clear {
+  padding: 0.35rem 0.6rem;
+}
+.sort-select {
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  color: var(--text-h);
+  font: inherit;
+}
