@@ -1731,3 +1731,66 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - #312 — Open testnet bounties from confirmed findings and persist the SHA-256 report proof on the router (@willy-de7)
 - #313 — Record private notification and enforce the disclosure embargo for report and bounty publication (@willy-de7)
 - #314 — Fetch signed community indicators and verify the exact rule bytes before scanning (@willy-de7)
+
+### Typosquat — Maven Central popular-package dataset — #337
+
+- **What:** Adds `data/popular-packages/maven-top1000.json`, the 1000
+  most-depended-on Maven Central artifacts ranked by deps.dev dependent
+  counts, written as `group:artifact` coordinates in rank order.
+  `scripts/update-datasets.py` gains a `maven` target that rebuilds the file
+  from deps.dev, and `typosquat::dataset` loads it for the Maven ecosystem
+  alongside the npm, PyPI, crates.io and RubyGems lists, so Maven
+  coordinates are scored and ranked like the others. The dataset README
+  documents the source and snapshot date.
+- **Tests:** the dataset validation test now covers the Maven file (unique,
+  trimmed, lowercase, valid `group:artifact` coordinates); the loader test
+  checks `org.springframework:spring-core` and `com.google.guava:guava`;
+  `maven_typosquat_is_flagged` in `src/typosquat/scanner.rs` flags
+  `com.google.guava:guav` as one edit from `com.google.guava:guava`.
+- **By:** cyfer-codes
+- **Closes:** #337
+- **Status:** In review.
+
+### Typosquat — project-level allowlist in `depradar.toml` — #342
+
+- **What:** `depradar.toml` accepts `typosquat.allow = ["name", ...]`
+  (`ProjectConfig::typosquat_allow`). At scan time the scanner merges it
+  with the built-in `data/allowlist.json` entries, so a project can silence
+  a known-good near-collision without editing DepRadar itself. Matching is
+  case-insensitive and applies to the package name as written in the
+  lockfile.
+- **Tests:** a config parse test in `src/config.rs` for the new
+  `typosquat.allow` key, and a scanner test in `src/typosquat/scanner.rs`
+  showing an allowed name produces no typosquat finding while the same name
+  without the allowlist entry is still flagged.
+- **By:** cyfer-codes
+- **Closes:** #342
+- **Status:** In review.
+
+### Typosquat — top-N matches and confidence from `typosquat-wasm` — #343
+
+- **What:** `crates/typosquat-wasm` now returns
+  `matches: [{name, distance, confidence}]` from its wasm API instead of a
+  single best match, built on `nearest_matches` and the existing confidence
+  score, so the dashboard can show alternatives and a score.
+  `frontend/src/lib/typosquat.ts` gains the matching `TyposquatMatch` type
+  and the updated result shape.
+- **Tests:** `crates/typosquat-wasm/tests/detect.rs` covers the new result
+  shape, including a name with several near matches and a clean name with an
+  empty `matches` array.
+- **By:** cyfer-codes
+- **Closes:** #343
+- **Status:** In review.
+
+### CVE — offline mode using a downloaded OSV database — #348
+
+- **What:** `depradar db update` downloads the per-ecosystem OSV zip dumps
+  and indexes them locally, and `depradar scan --offline-db` makes `scan`
+  query that local index instead of osv.dev, so air-gapped CI can run
+  without network access. The `src/cve/` module gains the local index and
+  the offline lookup path; the online client is unchanged.
+- **Tests:** a fixture scan run against the local DB produces the same
+  findings as the mocked OSV API, in `tests/cli.rs`.
+- **By:** cyfer-codes
+- **Closes:** #348
+- **Status:** In review.

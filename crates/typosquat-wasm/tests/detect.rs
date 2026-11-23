@@ -10,6 +10,16 @@ fn flags_a_distance_typosquat() {
 }
 
 #[test]
+fn detect_returns_top_matches() {
+    let detection = detect("expresss");
+    assert!(!detection.matches.is_empty());
+    let best = &detection.matches[0];
+    assert_eq!(best.name, "express");
+    assert_eq!(best.distance, 1);
+    assert!(best.confidence > 0);
+}
+
+#[test]
 fn popular_package_has_no_signals() {
     let detection = detect("express");
     assert!(!detection.flagged);
@@ -26,4 +36,15 @@ fn scan_returns_json() {
         .unwrap()
         .iter()
         .any(|s| s["kind"] == "combosquat"));
+}
+
+#[test]
+fn scan_json_includes_matches() {
+    let json: serde_json::Value = serde_json::from_str(&scan("expresss")).unwrap();
+    let matches = json["matches"].as_array().unwrap();
+    assert!(!matches.is_empty());
+    let best = &matches[0];
+    assert!(best["name"].is_string());
+    assert!(best["distance"].is_number());
+    assert!(best["confidence"].is_number());
 }

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Regenerate the popular-package datasets in data/popular-packages/.
 
-Fetches the current most-downloaded packages for npm, PyPI, crates.io and
-RubyGems from public download-stat sources and rewrites each `<registry>-top1000.json` as a
-de-duplicated JSON array of lowercase names, most-downloaded first (the
-typo-squat scanner uses that order as a popularity rank). A file is only rewritten
-when its content changes, so running this twice in a row leaves no diff.
+Fetches the current most-downloaded packages for npm, PyPI, crates.io,
+RubyGems and Maven Central from public download-stat sources and rewrites each
+`<registry>-top1000.json` as a de-duplicated JSON array of lowercase names,
+most-downloaded first (the typo-squat scanner uses that order as a popularity
+rank). A file is only rewritten when its content changes, so running this twice
+in a row leaves no diff.
 
 Usage:
     python3 scripts/update-datasets.py            # all registries
@@ -20,6 +21,7 @@ import json
 import re
 import sys
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -31,6 +33,7 @@ NPM_SOURCE = "https://raw.githubusercontent.com/wooorm/npm-high-impact/main/lib/
 PYPI_SOURCE = "https://hugovk.dev/top-pypi-packages/top-pypi-packages.min.json"
 CRATES_SOURCE = "https://crates.io/api/v1/crates?sort=recent-downloads&per_page=100&page={page}"
 RUBYGEMS_SOURCE = "https://bestgems.org/total?page={page}"
+MAVEN_SOURCE = "https://api.deps.dev/v3alpha/query?system=MAVEN&pageSize=100&pageToken={token}"
 
 # Name rules, matching the dataset validation test in src/typosquat/dataset.rs.
 NPM_PART = r"[a-z0-9~-][a-z0-9._~-]*"
@@ -38,6 +41,7 @@ NPM_NAME = re.compile(rf"(@{NPM_PART}/)?{NPM_PART}")
 PYPI_NAME = re.compile(r"[a-z0-9]([a-z0-9._-]*[a-z0-9])?")
 CRATES_NAME = re.compile(r"[a-z][a-z0-9_-]*")
 RUBYGEMS_NAME = re.compile(r"[a-z0-9][a-z0-9._-]*")
+MAVEN_NAME = re.compile(r"[a-z0-9._-]+:[a-z0-9._-]+")
 
 
 def fetch(url):
@@ -100,6 +104,29 @@ def rubygems_ranked():
     return names
 
 
+def maven_ranked():
+    """Maven Central `group:artifact` names, most-dependent first.
+
+    deps.dev's query endpoint ranks Maven packages by their dependent count
+    (how many other packages depend on them) and serves 100 per page with an
+    opaque page token. Pages are fetched one per second to stay polite.
+    """
+    names = []
+    token = ""
+    while True:
+        if token:
+            time.sleep(1)
+        payload = json.loads(fetch(MAVEN_SOURCE.format(token=urllib.parse.quote(token))))
+        results = payload.get("results", [])
+        for result in results:
+            version = result.get("version", {})
+            names.append(f"{version.get('versionKey', {}).get('name', '')}")
+        token = payload.get("nextPageToken", "")
+        if len(set(names)) >= TOP_N or not token or not results:
+            break
+    return names
+
+
 def pypi_identity(name):
     return re.sub(r"[-_.]+", "-", name)
 
@@ -109,6 +136,7 @@ REGISTRIES = {
     "pypi": (pypi_ranked, PYPI_NAME.fullmatch, pypi_identity),
     "crates": (crates_ranked, lambda name: CRATES_NAME.fullmatch(name) and len(name) <= 64, str),
     "rubygems": (rubygems_ranked, RUBYGEMS_NAME.fullmatch, str),
+    "maven": (maven_ranked, MAVEN_NAME.fullmatch, str),
 }
 
 

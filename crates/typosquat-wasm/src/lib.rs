@@ -30,6 +30,17 @@ pub struct Signal {
     pub detail: String,
 }
 
+/// One of the closest popular packages to the candidate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Match {
+    /// Name of the popular package that is close to the candidate.
+    pub name: String,
+    /// Edit distance between the candidate and `name`.
+    pub distance: usize,
+    /// Confidence (0-100) that the candidate imitates `name`.
+    pub confidence: u8,
+}
+
 /// What the dashboard renders for a package.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Detection {
@@ -37,6 +48,8 @@ pub struct Detection {
     pub flagged: bool,
     pub confidence: u8,
     pub signals: Vec<Signal>,
+    /// Closest popular packages, best first.
+    pub matches: Vec<Match>,
 }
 
 impl From<ScanResult> for Detection {
@@ -82,11 +95,21 @@ impl From<ScanResult> for Detection {
                 detail: format!("attaches bait words to \"{name}\""),
             });
         }
+        let matches = result
+            .nearest
+            .iter()
+            .map(|nearest| Match {
+                name: nearest.name.clone(),
+                distance: nearest.distance,
+                confidence: nearest.confidence,
+            })
+            .collect();
         Detection {
             flagged: result.is_likely_typosquat(),
             candidate: result.candidate,
             confidence: result.confidence,
             signals,
+            matches,
         }
     }
 }
@@ -97,7 +120,7 @@ pub fn detect(name: &str) -> Detection {
 }
 
 /// Scores `name` and returns its [`Detection`] as JSON:
-/// `{"candidate":..,"flagged":..,"confidence":..,"signals":[{"kind":..,"detail":..}]}`.
+/// `{"candidate":..,"flagged":..,"confidence":..,"signals":[{"kind":..,"detail":..}],"matches":[{"name":..,"distance":..,"confidence":..}]}`.
 #[wasm_bindgen]
 pub fn scan(name: &str) -> String {
     serde_json::to_string(&detect(name)).expect("Detection always serializes")

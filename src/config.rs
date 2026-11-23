@@ -34,6 +34,13 @@
 //! # public registry are flagged as possible dependency confusion.
 //! # Default: []
 //! private_packages = ["@acme/billing", "acme-internal-utils"]
+//!
+//! # Typosquat detection settings.
+//! [typosquat]
+//! # Package names to treat as known-good and never flag as typosquats.
+//! # These are merged with the built-in allowlist at scan time.
+//! # Default: []
+//! allow = ["expresss", "@acme/utils"]
 //! ```
 
 use std::fmt;
@@ -171,6 +178,17 @@ impl std::str::FromStr for ConfigFormat {
     }
 }
 
+/// Typosquat detection settings from the `[typosquat]` section of
+/// `depradar.toml`.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TyposquatConfig {
+    /// Package names to treat as known-good. Merged with the built-in
+    /// allowlist at scan time. Default: empty.
+    #[serde(default)]
+    pub allow: Vec<String>,
+}
+
 /// Contents of a `depradar.toml` file.
 ///
 /// Every field is optional; missing fields fall back to the built-in default.
@@ -199,6 +217,18 @@ pub struct ProjectConfig {
     /// registry for dependency confusion. Default: empty.
     #[serde(default)]
     pub private_packages: Vec<String>,
+
+    /// Typosquat detection settings. Default: empty allowlist.
+    #[serde(default)]
+    pub typosquat: TyposquatConfig,
+}
+
+impl ProjectConfig {
+    /// Project-level typosquat allowlist, merged with the built-in allowlist
+    /// at scan time.
+    pub fn typosquat_allow(&self) -> &[String] {
+        &self.typosquat.allow
+    }
 }
 
 /// Errors that can occur when loading a `depradar.toml`.
@@ -322,6 +352,8 @@ mod tests {
         assert!(cfg.exclude.is_empty());
         assert!(cfg.ecosystems.is_empty());
         assert!(cfg.private_packages.is_empty());
+        assert!(cfg.typosquat.allow.is_empty());
+        assert!(cfg.typosquat_allow().is_empty());
     }
 
     #[test]
@@ -350,6 +382,17 @@ mod tests {
             cfg.private_packages,
             vec!["@acme/billing", "acme-internal-utils"]
         );
+    }
+
+    #[test]
+    fn typosquat_allow_parses() {
+        let toml = r#"
+            [typosquat]
+            allow = ["expresss"]
+        "#;
+        let cfg: ProjectConfig = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.typosquat.allow, vec!["expresss"]);
+        assert_eq!(cfg.typosquat_allow(), ["expresss"]);
     }
 
     #[test]

@@ -1,4 +1,5 @@
-//! Bundled lists of popular npm, PyPI, crates.io and RubyGems package names.
+//! Bundled lists of popular npm, PyPI, crates.io, RubyGems and Maven Central
+//! package names.
 //!
 //! Typosquatting attacks work by publishing a package whose name is one edit
 //! away from something popular (`reqeusts`, `expresss`, `lodahs`). Detecting
@@ -30,36 +31,43 @@ const CRATES_TOP_PACKAGES_JSON: &str =
 const RUBYGEMS_TOP_PACKAGES_JSON: &str =
     include_str!("../../data/popular-packages/rubygems-top1000.json");
 
+/// Raw JSON text of the Maven Central popular-package list, embedded at
+/// compile time. Entries are `groupId:artifactId` coordinates.
+const MAVEN_TOP_PACKAGES_JSON: &str =
+    include_str!("../../data/popular-packages/maven-top1000.json");
+
 /// Raw JSON text of the allowlist of legitimate near-collisions, embedded at
 /// compile time.
 #[allow(dead_code)]
 const ALLOWLIST_JSON: &str = include_str!("../../data/allowlist.json");
 
-/// Loads the bundled npm, PyPI, crates.io and RubyGems popular-package lists
-/// and returns them as a single combined list.
+/// Loads the bundled npm, PyPI, crates.io, RubyGems and Maven Central
+/// popular-package lists and returns them as a single combined list.
 ///
-/// npm entries come first, in file order, followed by PyPI, crates.io and
-/// then RubyGems entries, each in file order. Names are returned as-is; no
-/// normalisation or de-duplication is applied — that belongs with the
-/// (not-yet-written) scoring logic.
+/// npm entries come first, in file order, followed by PyPI, crates.io,
+/// RubyGems and then Maven Central entries, each in file order. Names are
+/// returned as-is; no normalisation or de-duplication is applied — that
+/// belongs with the (not-yet-written) scoring logic.
 pub fn load_popular_packages() -> Vec<String> {
     let mut combined = parse_string_array(NPM_TOP_PACKAGES_JSON);
     combined.extend(parse_string_array(PYPI_TOP_PACKAGES_JSON));
     combined.extend(parse_string_array(CRATES_TOP_PACKAGES_JSON));
     combined.extend(parse_string_array(RUBYGEMS_TOP_PACKAGES_JSON));
+    combined.extend(parse_string_array(MAVEN_TOP_PACKAGES_JSON));
     combined
 }
 
-/// The npm, PyPI, crates.io and RubyGems lists, parsed once and cached for
-/// the life of the process.
-fn registry_lists() -> &'static [Vec<String>; 4] {
-    static LISTS: OnceLock<[Vec<String>; 4]> = OnceLock::new();
+/// The npm, PyPI, crates.io, RubyGems and Maven Central lists, parsed once
+/// and cached for the life of the process.
+fn registry_lists() -> &'static [Vec<String>; 5] {
+    static LISTS: OnceLock<[Vec<String>; 5]> = OnceLock::new();
     LISTS.get_or_init(|| {
         [
             parse_string_array(NPM_TOP_PACKAGES_JSON),
             parse_string_array(PYPI_TOP_PACKAGES_JSON),
             parse_string_array(CRATES_TOP_PACKAGES_JSON),
             parse_string_array(RUBYGEMS_TOP_PACKAGES_JSON),
+            parse_string_array(MAVEN_TOP_PACKAGES_JSON),
         ]
     })
 }
@@ -183,6 +191,12 @@ mod tests {
             is_valid_name: is_valid_gem_name,
             identity: str::to_string,
         },
+        Dataset {
+            file: "maven-top1000.json",
+            raw: MAVEN_TOP_PACKAGES_JSON,
+            is_valid_name: is_valid_maven_name,
+            identity: str::to_string,
+        },
     ];
 
     /// npm: an optional `@scope/` prefix, then a name, each made of
@@ -234,6 +248,29 @@ mod tests {
             && name
                 .chars()
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._".contains(c))
+    }
+
+    /// Maven Central: a `groupId:artifactId` coordinate. Both parts are
+    /// lowercase and made of `a-z 0-9 - . _`; the groupId has at least one
+    /// dot-separated segment and neither part is empty.
+    fn is_valid_maven_name(name: &str) -> bool {
+        fn is_valid_part(part: &str) -> bool {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._".contains(c))
+        }
+
+        match name.split_once(':') {
+            Some((group, artifact)) => {
+                is_valid_part(group)
+                    && group.contains('.')
+                    && !group.starts_with('.')
+                    && !group.ends_with('.')
+                    && is_valid_part(artifact)
+            }
+            None => false,
+        }
     }
 
     /// PEP 503 normalisation: runs of `-`, `_` and `.` collapse to one `-`,
@@ -387,6 +424,64 @@ mod tests {
                 "expected gem '{name}' in the combined list"
             );
         }
+
+        // A well-known Maven Central coordinate.
+        assert!(
+            packages
+                .iter()
+                .any(|p| p == "org.springframework:spring-core"),
+            "expected Maven coordinate 'org.springframework:spring-core' in the combined list"
+        );
+    }
+
+    #[test]
+    fn maven_typosquat_is_flagged() {
+        // `org.springframework:spring-cor` is one edit away from the popular
+        // `org.springframework:spring-core` coordinate.
+        let typo = "org.springframework:spring-cor";
+        let target = "org.springframework:spring-core";
+
+        assert!(
+            load_popular_packages().iter().any(|p| p == target),
+            "expected {target:?} in the Maven dataset"
+        );
+        assert!(
+            !load_popular_packages().iter().any(|p| p == typo),
+            "typosquat {typo:?} should not itself be a listed package"
+        );
+        assert!(
+            is_one_edit_away(typo, target),
+            "expected {typo:?} to be one edit away from {target:?}"
+        );
+    }
+
+    /// Returns true if `a` and `b` differ by exactly one insertion, deletion
+    /// or substitution.
+    fn is_one_edit_away(a: &str, b: &str) -> bool {
+        let a: Vec<char> = a.chars().collect();
+        let b: Vec<char> = b.chars().collect();
+        if a.len().abs_diff(b.len()) > 1 {
+            return false;
+        }
+        if a.len() == b.len() {
+            return a.iter().zip(&b).filter(|(x, y)| x != y).count() == 1;
+        }
+        let (shorter, longer) = if a.len() < b.len() { (&a, &b) } else { (&b, &a) };
+        let mut i = 0;
+        let mut j = 0;
+        let mut skipped = false;
+        while i < shorter.len() && j < longer.len() {
+            if shorter[i] == longer[j] {
+                i += 1;
+                j += 1;
+            } else if skipped {
+                return false;
+            } else {
+                skipped = true;
+                j += 1;
+            }
+        }
+        true
     }
 
     #[test]
