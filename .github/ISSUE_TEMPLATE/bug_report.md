@@ -1,32 +1,40 @@
 ---
 name: Bug report
-about: Something in the contract, scanner, or client behaves incorrectly
+about: Something in the contract, scanner, frontend, or client behaves incorrectly
 title: "[bug] "
 labels: bug
 ---
 
 ## What happened
 
-<!-- What did you run, and what went wrong? -->
+<!-- What command or interaction did you run, and what went wrong? Include terminal output or error logs if available. -->
 
 ## Expected behavior
 
-## Steps to reproduce
+<!-- What did you expect to happen instead? -->
+
+## Minimal Reproduction Steps
 
 1.
 2.
+3.
+
+<!-- If applicable, provide a minimal lockfile, package name, or Soroban CLI invocation that reproduces the issue. -->
 
 ## Component
 
 - [ ] `contracts/deprader_router` (Soroban contract)
 - [ ] Typosquat scanner (`src/typosquat/`)
 - [ ] CVE matching (`src/cve/`)
+- [ ] Behavioral analysis (`src/behavioral/`)
+- [ ] Lockfile parsers (`src/lockfile/`)
+- [ ] Frontend dashboard (`frontend/`)
 - [ ] Testnet read client (`client/`)
 - [ ] CI / tooling
 
 ## Environment
 
-- Commit:
+- Commit / Version:
 - OS:
 - `rustc --version` / `node --version`:
 

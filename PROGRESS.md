@@ -10,6 +10,13 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Devex — Issue templates for contract, frontend and bug reports with repro — #438
+
+- **What:** Adds `.github/ISSUE_TEMPLATE/contract.md` and `.github/ISSUE_TEMPLATE/frontend.md` matching the existing module template style, with structured prompts for signatures, storage keys, authorization, UX scope, and Definition of Done checklists. Updates `.github/ISSUE_TEMPLATE/bug_report.md` to include minimal reproduction steps and updated component checkboxes (including frontend and behavioral modules).
+- **Verified:** All template YAML frontmatter (`name`, `about`, `title`, `labels`) checked against GitHub Issue Template specification.
+- **By:** genda-benjamin
+- **Closes:** #438
+
 ### Devex — Replace `unwrap()` / `expect()` in `src/lockfile` non-test code — #444
 
 - **What:** Audited all non-test code across `src/lockfile/` (`mod.rs`, `cargo.rs`, `npm.rs`, `pnpm.rs`, `pypi.rs`, `yarn.rs`). Confirmed zero `unwrap()` or `expect()` calls exist outside `#[cfg(test)]`, with all parsers properly returning `Result<_, ParseError>` and `Result<_, LockfileError>`. Documented the unreachable match arm invariant in `src/lockfile/mod.rs` for early-returned lockfile kinds.
