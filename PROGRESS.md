@@ -10,6 +10,13 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Docs — `.depradarignore` format reference — #446
+
+- **What:** Adds [`docs/ignore.md`](docs/ignore.md) documenting the `.depradarignore` accepted-risk suppression syntax (`package`, `version`, `advisory`, `reason`, `expires`), field validation requirements, expiration behavior, and file discovery rules. Links the document from the README Documentation section.
+- **Verified:** All keys, date parsing formats (`YYYY-MM-DD`), matching logic, and strict TOML restrictions cross-referenced against `src/ignore.rs`.
+- **By:** genda-benjamin
+- **Closes:** #446
+
 ### Devex — Replace `unwrap()` / `expect()` in `src/lockfile` non-test code — #444
 
 - **What:** Audited all non-test code across `src/lockfile/` (`mod.rs`, `cargo.rs`, `npm.rs`, `pnpm.rs`, `pypi.rs`, `yarn.rs`). Confirmed zero `unwrap()` or `expect()` calls exist outside `#[cfg(test)]`, with all parsers properly returning `Result<_, ParseError>` and `Result<_, LockfileError>`. Documented the unreachable match arm invariant in `src/lockfile/mod.rs` for early-returned lockfile kinds.
