@@ -10,6 +10,13 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Docs — `depradar.toml` reference — #445
+
+- **What:** Adds [`docs/config.md`](docs/config.md) documenting every configuration key in `src/config.rs` (`fail_on`, `format`, `exclude`, `ecosystems`, `private_packages`), their types, default values, and overriding CLI flags. Links the document from the README Documentation section.
+- **Verified:** Every key, type, default value, and CLI flag cross-referenced against `src/config.rs` and `src/bin/depradar.rs`.
+- **By:** genda-benjamin
+- **Closes:** #445
+
 ### Devex — Replace `unwrap()` / `expect()` in `src/lockfile` non-test code — #444
 
 - **What:** Audited all non-test code across `src/lockfile/` (`mod.rs`, `cargo.rs`, `npm.rs`, `pnpm.rs`, `pypi.rs`, `yarn.rs`). Confirmed zero `unwrap()` or `expect()` calls exist outside `#[cfg(test)]`, with all parsers properly returning `Result<_, ParseError>` and `Result<_, LockfileError>`. Documented the unreachable match arm invariant in `src/lockfile/mod.rs` for early-returned lockfile kinds.
