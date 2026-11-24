@@ -43,6 +43,14 @@ past a CI gate. Example: an advisory with a CVSS v3 vector of
 `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` (base score 9.8) is
 **critical**.
 
+### `FindingKind::NonRegistrySource`
+
+A dependency installed from a git URL, a tarball URL or a local `file:`
+path is **low**: it is usually a deliberate fork or workspace package, but
+the code doesn't come from the registry, so registry-side checks don't
+cover it and a reviewer should glance at it. Example: `left-pad` resolved from
+`git+https://github.com/stevemao/left-pad.git#v1.3.0` in a `yarn.lock`.
+
 ### Behavioral findings
 
 Behavioral detectors ([`src/behavioral/`](../src/behavioral/mod.rs)) rate

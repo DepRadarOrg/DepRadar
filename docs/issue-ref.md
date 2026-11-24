@@ -16,7 +16,7 @@ standard format for refs built from a finding:
 | `ecosystem` | `npm`, `pypi`, `crates.io`, `go`, `maven`, `rubygems` or `packagist`. Lowercase when written; parsed case-insensitively. |
 | `package` | The package name exactly as the registry knows it, including an npm scope (`@babel/core`) or a Maven `group:artifact`. No whitespace. |
 | `version` | The pinned version, when the lockfile records one. Omitted for unpinned dependencies. |
-| `kind` | `typosquat`, `vulnerability`, `deprecated` or `license`, matching [`FindingKind`](../src/model.rs). |
+| `kind` | `typosquat`, `vulnerability`, `deprecated`, `license` or `non-registry-source`, matching [`FindingKind`](../src/model.rs). |
 | `detail` | Optional. The advisory ID for a `vulnerability`, the impersonated package for a `typosquat`, or the offending license for a `license` finding. |
 
 ## Examples

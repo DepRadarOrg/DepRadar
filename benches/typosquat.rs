@@ -6,12 +6,16 @@ use deprader::typosquat::distance::{levenshtein_distance, nearest_match};
 use deprader::typosquat::scanner::score_package;
 use std::hint::black_box;
 
-/// `(label, candidate)`: an exact popular name, a one-keystroke typo, and
-/// "react" with a Cyrillic 'а' (U+0430).
-const INPUTS: [(&str, &str); 3] = [
+/// `(label, candidate)`: an exact popular name, a one-keystroke typo,
+/// "react" with a Cyrillic 'а' (U+0430), and affix-squats that must be
+/// stripped before matching against the dataset.
+const INPUTS: [(&str, &str); 6] = [
     ("clean", "react"),
     ("typo", "expresss"),
     ("homoglyph", "re\u{0430}ct"),
+    ("affix_suffix", "lodash-js"),
+    ("affix_prefix", "node-lodash"),
+    ("affix_py", "requests-py"),
 ];
 
 fn bench_levenshtein(c: &mut Criterion) {

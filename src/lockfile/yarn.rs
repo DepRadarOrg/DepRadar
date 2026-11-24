@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 
-use super::ParseError;
+use super::{is_non_registry_spec, ParseError};
 use crate::model::{Dependency, Ecosystem};
 
 /// Parses a Yarn v1 `yarn.lock` into its locked dependencies.
@@ -25,15 +25,17 @@ pub fn parse_yarn_lock(contents: &str) -> Result<Vec<Dependency>, ParseError> {
 
     let mut seen = BTreeSet::new();
     let mut deps = Vec::new();
-    let mut current: Option<String> = None;
+    let mut current: Option<(String, Option<String>)> = None;
 
     for line in contents.lines() {
         if line.trim().is_empty() || line.trim_start().starts_with('#') {
             continue;
         }
         if !line.starts_with(char::is_whitespace) {
-            current = header_name(line);
-        } else if let (Some(name), Some(version)) = (&current, field_version(line)) {
+            current = header_source(line)
+                .map(|(name, source)| (name, Some(source)))
+                .or_else(|| header_name(line).map(|name| (name, None)));
+        } else if let (Some((name, source)), Some(version)) = (&current, field_version(line)) {
             if seen.insert((name.clone(), version.to_string())) {
                 deps.push(Dependency {
                     name: name.clone(),
@@ -42,6 +44,7 @@ pub fn parse_yarn_lock(contents: &str) -> Result<Vec<Dependency>, ParseError> {
                     direct: false,
                     dev: false,
                     path: Vec::new(),
+                    source: source.clone(),
                 });
             }
             current = None;
@@ -118,6 +121,19 @@ fn header_name(line: &str) -> Option<String> {
     let at = specifier.get(1..)?.rfind('@')? + 1;
     let name = &specifier[..at];
     (!name.is_empty()).then(|| name.to_string())
+}
+
+/// For an entry header whose first specifier installs from outside the
+/// registry (`"pkg@git+https://…"`, `pkg@file:./pkg`, a tarball URL),
+/// returns the package name and that source. The name ends at the first `@`
+/// after position 0, since a URL may contain `@` itself.
+fn header_source(line: &str) -> Option<(String, String)> {
+    let header = line.trim_end().strip_suffix(':')?;
+    let specifier = header.split(',').next()?.trim().trim_matches('"');
+    let at = specifier.get(1..)?.find('@')? + 1;
+    let (name, range) = (&specifier[..at], &specifier[at + 1..]);
+    (!name.is_empty() && is_non_registry_spec(range))
+        .then(|| (name.to_string(), range.to_string()))
 }
 
 /// Returns the value of an indented `version "x.y.z"` field.

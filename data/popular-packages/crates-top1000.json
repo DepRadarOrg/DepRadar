@@ -1,4 +1,6 @@
-[
+{
+  "generated_at": "2026-01-15",
+  "packages": [
   "hashbrown",
   "syn",
   "getrandom",
@@ -999,4 +1001,5 @@
   "kube-client",
   "icu_locid_transform_data",
   "threadpool"
-]
+  ]
+}

@@ -71,10 +71,10 @@ fn one_rule_per_finding_kind_and_one_result_per_finding() {
         .iter()
         .map(|rule| rule["id"].as_str().unwrap())
         .collect();
-    assert_eq!(rules, ["typosquat", "vulnerability"]);
+    assert_eq!(rules, ["typosquat", "vulnerability", "non-registry-source"]);
 
     let results = run["results"].as_array().unwrap();
-    assert_eq!(results.len(), 2, "results: {results:#?}");
+    assert_eq!(results.len(), 3, "results: {results:#?}");
 
     let typosquat = &results[0];
     assert_eq!(typosquat["ruleId"], "typosquat");
@@ -85,6 +85,15 @@ fn one_rule_per_finding_kind_and_one_result_per_finding() {
     assert_eq!(vulnerability["ruleId"], "vulnerability");
     assert_eq!(vulnerability["level"], "warning");
     assert_eq!(vulnerability["properties"]["severity"], "medium");
+
+    // The fixture's local `file:` install.
+    let non_registry = &results[2];
+    assert_eq!(non_registry["ruleId"], "non-registry-source");
+    assert_eq!(non_registry["level"], "note");
+    assert_eq!(
+        non_registry["properties"]["package"],
+        "zzz-unversioned-internal-fixture"
+    );
 
     for result in results {
         let location = &result["locations"][0]["physicalLocation"];

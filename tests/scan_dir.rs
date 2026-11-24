@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use deprader::pipeline::{scan_dir, ScanOptions};
+use deprader::cve::osv_client::OsvBatchQuery;
+use deprader::pipeline::{
+    scan_dir, scan_dir_changed_since, AdvisoryError, AdvisorySource, ScanOptions,
+};
 
 /// A fresh directory under the system temp dir, removed on drop.
 struct TempDir(PathBuf);
@@ -128,4 +131,96 @@ fn scan_dir_reports_a_malformed_lockfile_and_keeps_going() {
 fn scan_dir_fails_when_the_root_is_missing() {
     let tree = TempDir::new();
     assert!(scan_dir(tree.0.join("missing"), &offline()).is_err());
+}
+
+/// Runs `git` in `dir`, panicking if it fails.
+fn git(dir: &Path, args: &[&str]) {
+    let status = process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=DepRadar"])
+        .args(["-c", "user.email=depradar@example.com"])
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?} failed");
+}
+
+#[test]
+fn scan_dir_changed_since_scans_only_changed_lockfiles() {
+    let tree = TempDir::new();
+    tree.write("apps/web/package-lock.json", WEB_LOCK);
+    tree.write("services/api/requirements.txt", "requests==2.31.0\n");
+    git(&tree.0, &["init", "-q"]);
+    git(&tree.0, &["add", "."]);
+    git(&tree.0, &["commit", "-q", "-m", "initial"]);
+
+    tree.write(
+        "services/api/requirements.txt",
+        "requests==2.31.0\nflask==3.0.0\n",
+    );
+
+    let report = scan_dir_changed_since(&tree.0, &offline(), "HEAD").unwrap();
+
+    let paths: Vec<&Path> = report.lockfiles.iter().map(|r| r.path.as_path()).collect();
+    assert_eq!(paths, [Path::new("services/api/requirements.txt")]);
+    assert_eq!(report.lockfiles[0].summary.packages, 2);
+
+    // Against an unknown ref the scan fails instead of silently scanning nothing.
+    assert!(scan_dir_changed_since(&tree.0, &offline(), "no-such-ref").is_err());
+}
+
+/// Reports one advisory for every pinned `requests` version.
+struct VulnerableRequests;
+
+impl AdvisorySource for VulnerableRequests {
+    fn query(&self, queries: &[OsvBatchQuery<'_>]) -> Result<Vec<Vec<String>>, AdvisoryError> {
+        Ok(queries
+            .iter()
+            .map(|query| match query.name {
+                "requests" => vec!["GHSA-x84v-xcm2-53pg".to_string()],
+                _ => Vec::new(),
+            })
+            .collect())
+    }
+}
+
+#[test]
+fn scan_dir_reports_a_shared_finding_once_with_every_lockfile() {
+    let tree = TempDir::new();
+    tree.write("services/api/requirements.txt", "requests==2.19.0\n");
+    tree.write(
+        "services/worker/requirements.txt",
+        "requests==2.19.0\nflask==3.0.0\n",
+    );
+    let opts = ScanOptions {
+        typosquat: false,
+        advisories: Some(&VulnerableRequests),
+        show_progress: false,
+        ..ScanOptions::default()
+    };
+
+    let report = scan_dir(&tree.0, &opts).unwrap();
+
+    // Each lockfile still records its own finding...
+    assert_eq!(report.lockfiles[0].findings.len(), 1);
+    assert_eq!(report.lockfiles[1].findings.len(), 1);
+
+    // ...but across the tree it is one finding with two paths.
+    let findings = report.findings();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].finding.package, "requests");
+    assert_eq!(
+        findings[0].lockfiles,
+        [
+            Path::new("services/api/requirements.txt"),
+            Path::new("services/worker/requirements.txt"),
+        ]
+    );
+
+    let rendered = report.to_string();
+    let lockfiles = "(in services/api/requirements.txt, services/worker/requirements.txt)";
+    assert_eq!(rendered.matches("requests@2.19.0").count(), 1, "{rendered}");
+    assert!(rendered.contains(lockfiles), "{rendered}");
 }

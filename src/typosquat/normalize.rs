@@ -46,6 +46,22 @@ pub fn normalize_name(name: &str) -> String {
     name.to_lowercase()
 }
 
+/// Maps every separator (`-`, `_`, `.`) to a single canonical `-` so that
+/// names differing only in separator choice compare equal.
+///
+/// `date_fns` gives `date-fns` and `lodash.merge` gives `lodash-merge`. The
+/// input is lowercased first, so the result is directly comparable against
+/// the (all-lowercase) dataset.
+pub fn normalize_separators(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| match c {
+            '-' | '_' | '.' => '-',
+            other => other,
+        })
+        .collect()
+}
+
 /// Edit distance between two package names that compares scoped names
 /// scope-to-scope and name-to-name (see the module docs).
 pub fn name_distance(a: &str, b: &str) -> usize {
@@ -82,6 +98,35 @@ mod tests {
     fn normalize_lowercases() {
         assert_eq!(normalize_name("React"), "react");
         assert_eq!(normalize_name("@Types/Node"), "@types/node");
+    }
+
+    #[test]
+    fn separators_map_to_dash() {
+        assert_eq!(normalize_separators("date_fns"), "date-fns");
+        assert_eq!(normalize_separators("lodash.merge"), "lodash-merge");
+        assert_eq!(normalize_separators("date-fns"), "date-fns");
+    }
+
+    #[test]
+    fn separator_normalisation_lowercases() {
+        assert_eq!(normalize_separators("Date_Fns"), "date-fns");
+    }
+
+    #[test]
+    fn separator_swaps_compare_equal() {
+        assert_eq!(
+            normalize_separators("date_fns"),
+            normalize_separators("date-fns")
+        );
+        assert_eq!(
+            normalize_separators("lodash.merge"),
+            normalize_separators("lodash-merge")
+        );
+    }
+
+    #[test]
+    fn non_separator_characters_are_untouched() {
+        assert_eq!(normalize_separators("react"), "react");
     }
 
     #[test]

@@ -18,8 +18,8 @@ use deprader::config::{load_project_config, ConfigFormat, FailOn, ProjectConfig}
 use deprader::ignore::{IgnoreFile, Suppressed, IGNORE_FILE_NAME};
 use deprader::model::{Ecosystem, Finding, FindingKind};
 use deprader::pipeline::{
-    scan_dir, scan_lockfile, watch_packages, DirReport, FakeCrawler as WatchFakeCrawler, Report,
-    ScanOptions,
+    scan_dir, scan_dir_changed_since, scan_lockfile, watch_packages, DirReport,
+    FakeCrawler as WatchFakeCrawler, Report, ScanOptions,
 };
 use deprader::report::{severity_of, AdvisorySeverities, Severity};
 use deprader::typosquat::scanner::{score_package, ScanResult};
@@ -125,6 +125,10 @@ enum Command {
         /// `ecosystems` in `depradar.toml`.
         #[arg(long = "ecosystem", value_name = "ECOSYSTEM")]
         ecosystems: Vec<String>,
+        /// Only scan lockfiles changed since this git ref, as listed by
+        /// `git diff --name-only <GIT_REF>` (directory scans only)
+        #[arg(long, value_name = "GIT_REF")]
+        changed_since: Option<String>,
     },
     /// Show details for a single advisory (summary, severity, affected
     /// ranges, fixed version and references)
@@ -147,6 +151,20 @@ enum Command {
         #[arg(value_enum)]
         shell: Shell,
     },
+    /// Inspect or clear the OSV response cache
+    Cache {
+        #[command(subcommand)]
+        action: CacheAction,
+    },
+}
+
+/// Subcommands for `depradar cache`.
+#[derive(Debug, Subcommand)]
+enum CacheAction {
+    /// Print the cache path, entry count and total size
+    Info,
+    /// Delete the cache directory
+    Clear,
 }
 
 /// Subcommands for managing the local OSV database.
@@ -342,6 +360,7 @@ fn main() -> ExitCode {
             offline_db,
             exclude,
             ecosystems,
+            changed_since,
         } => {
             let config = ResolvedConfig::resolve(
                 project_config.as_ref(),
@@ -355,6 +374,7 @@ fn main() -> ExitCode {
                 offline,
                 offline_db,
                 cli.quiet,
+                changed_since.as_deref(),
                 &config.exclude,
                 &config.ecosystems,
             ) {
@@ -369,7 +389,6 @@ fn main() -> ExitCode {
                         ExitCode::FAILURE
                     } else {
                         ExitCode::SUCCESS
-                    }
                 }
                 Err(message) => {
                     eprintln!("error: {message}");
@@ -395,6 +414,58 @@ fn main() -> ExitCode {
             );
             ExitCode::SUCCESS
         }
+        Command::Cache { action } => run_cache(action, cli.format.unwrap_or(Format::Text)),
+    }
+}
+
+/// Runs `depradar cache info` or `depradar cache clear`.
+fn run_cache(action: CacheAction, format: Format) -> ExitCode {
+    use deprader::cve::cache;
+
+    match action {
+        CacheAction::Info => {
+            let info = match cache::cache_info() {
+                Ok(info) => info,
+                Err(err) => {
+                    let message = err.to_string();
+                    eprintln!("error: {message}");
+                    if format == Format::Json {
+                        print_json(&json!({ "error": message }));
+                    }
+                    return ExitCode::from(2);
+                }
+            };
+            match format {
+                Format::Text => {
+                    println!("Cache path: {}", info.path.display());
+                    println!("Entries: {}", info.entries);
+                    println!("Size: {} bytes", info.size_bytes);
+                }
+                Format::Json => print_json(&json!({
+                    "path": info.path,
+                    "entries": info.entries,
+                    "size_bytes": info.size_bytes,
+                })),
+            }
+            ExitCode::SUCCESS
+        }
+        CacheAction::Clear => match cache::clear_cache() {
+            Ok(path) => {
+                match format {
+                    Format::Text => println!("Cleared cache at {}", path.display()),
+                    Format::Json => print_json(&json!({ "cleared": path })),
+                }
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                let message = err.to_string();
+                eprintln!("error: {message}");
+                if format == Format::Json {
+                    print_json(&json!({ "error": message }));
+                }
+                ExitCode::from(2)
+            }
+        },
     }
 }
 
@@ -622,6 +693,7 @@ fn scan(
     offline: bool,
     offline_db: bool,
     quiet: bool,
+    changed_since: Option<&str>,
     exclude: &[String],
     ecosystems: &[String],
 ) -> Result<Scanned, String> {
@@ -664,18 +736,60 @@ fn scan(
     }
 
     if path.is_dir() {
-        let mut report =
-            scan_dir(path, &opts).map_err(|err| format!("{}: {err}", path.display()))?;
+        let mut report = match changed_since {
+            Some(git_ref) => scan_dir_changed_since(path, &opts, git_ref),
+            None => scan_dir(path, &opts),
+        }
+        .map_err(|err| format!("{}: {err}", path.display()))?;
         // Filter out lockfiles that match an exclude pattern.
         report.lockfiles.retain(|r| {
             !is_excluded(r.path.strip_prefix(path).unwrap_or(&r.path), exclude)
                 && selected_ecosystem(&r.path, ecosystems)
         });
+        if !offline {
+            for lockfile in &mut report.lockfiles {
+                enrich_findings(&mut lockfile.findings);
+            }
+        }
         Ok(Scanned::Dir(report))
     } else {
-        scan_lockfile(path, &opts)
-            .map(Scanned::File)
-            .map_err(|err| err.to_string())
+        let mut report = scan_lockfile(path, &opts).map_err(|err| err.to_string())?;
+        if !offline {
+            enrich_findings(&mut report.findings);
+        }
+        Ok(Scanned::File(report))
+    }
+}
+
+/// Enriches vulnerability findings with KEV and EPSS data.
+///
+/// Failures are non-fatal: a missing feed simply leaves the fields unset.
+fn enrich_findings(findings: &mut [Finding]) {
+    use deprader::cve::{epss, kev};
+
+    let cve_ids: Vec<String> = findings
+        .iter()
+        .filter_map(|finding| match &finding.kind {
+            FindingKind::Vulnerability { advisory_id } => Some(advisory_id.clone()),
+            _ => None,
+        })
+        .collect();
+    if cve_ids.is_empty() {
+        return;
+    }
+
+    let kev_ids = kev::known_exploited_ids().unwrap_or_default();
+    let epss_scores = epss::scores_for(&cve_ids).unwrap_or_default();
+
+    for finding in findings.iter_mut() {
+        if let FindingKind::Vulnerability { advisory_id } = &finding.kind {
+            if kev_ids.contains(advisory_id) {
+                finding.known_exploited = true;
+            }
+            if let Some(score) = epss_scores.get(advisory_id) {
+                finding.epss_score = Some(*score);
+            }
+        }
     }
 }
 
@@ -928,6 +1042,8 @@ fn finding_json(finding: &Finding) -> Value {
         FindingKind::Vulnerability { advisory_id } => json!({
             "kind": "vulnerability",
             "advisory_id": advisory_id,
+            "known_exploited": finding.known_exploited,
+            "epss_score": finding.epss_score,
         }),
         FindingKind::Deprecated { message } => json!({"kind": "deprecated", "message": message}),
         FindingKind::License { license, allowed } => {

@@ -10,7 +10,7 @@
 //! - [`gradle`] — `gradle.lockfile`
 //! - [`npm`] — `package.json`
 //! - [`pnpm`] — `pnpm-lock.yaml` (v6 and v9)
-//! - [`pypi`] — `Pipfile.lock`
+//! - [`pypi`] — `Pipfile.lock`, `pyproject.toml`
 //! - [`ruby`] — `Gemfile.lock`
 //! - [`yarn`] — `yarn.lock` (v1 and Berry)
 //!
@@ -54,6 +54,8 @@ pub enum LockfileKind {
     CargoLock,
     /// npm `package.json` manifest (direct dependencies only).
     PackageJson,
+    /// PEP 621 `pyproject.toml` manifest (direct dependencies only).
+    PyprojectToml,
     /// Bun `bun.lock` (text lockfile).
     BunLock,
     /// uv `uv.lock`.
@@ -82,6 +84,7 @@ pub fn detect(path: impl AsRef<Path>) -> Option<LockfileKind> {
         "Pipfile.lock" => LockfileKind::PipfileLock,
         "Cargo.lock" => LockfileKind::CargoLock,
         "package.json" => LockfileKind::PackageJson,
+        "pyproject.toml" => LockfileKind::PyprojectToml,
         "bun.lock" => LockfileKind::BunLock,
         "uv.lock" => LockfileKind::UvLock,
         "pdm.lock" => LockfileKind::PdmLock,
@@ -95,6 +98,25 @@ pub fn detect(path: impl AsRef<Path>) -> Option<LockfileKind> {
         _ => return None,
     };
     Some(kind)
+}
+
+/// True for npm-style dependency specs that bypass the registry: git URLs
+/// and hosted-git shorthands, tarball URLs, and local `file:` / `link:`
+/// paths.
+pub(crate) fn is_non_registry_spec(spec: &str) -> bool {
+    const PREFIXES: &[&str] = &[
+        "git+",
+        "git:",
+        "git@",
+        "github:",
+        "gitlab:",
+        "bitbucket:",
+        "file:",
+        "link:",
+        "http:",
+        "https:",
+    ];
+    PREFIXES.iter().any(|prefix| spec.starts_with(prefix))
 }
 
 /// The result of parsing one lockfile.
@@ -165,6 +187,16 @@ pub fn parse_lockfile(path: &Path) -> Result<ParsedLockfile, LockfileError> {
         });
     }
 
+    if kind == LockfileKind::PyprojectToml {
+        let (dependencies, warnings) = pypi::parse_pyproject_with_warnings(&contents)
+            .map_err(|err| LockfileError::Invalid(err.to_string()))?;
+        return Ok(ParsedLockfile {
+            ecosystem: Ecosystem::PyPI,
+            dependencies,
+            warnings,
+        });
+    }
+
     let parse: fn(&str) -> Result<Vec<Dependency>, ParseError> = match kind {
         LockfileKind::PipfileLock => pypi::parse_pipfile_lock,
         LockfileKind::CargoLock => cargo::parse_cargo_lock,
@@ -179,7 +211,7 @@ pub fn parse_lockfile(path: &Path) -> Result<ParsedLockfile, LockfileError> {
         LockfileKind::GradleLock => gradle::parse_gradle_lockfile,
         LockfileKind::GoSum => go::parse_go_sum,
         LockfileKind::ComposerLock => composer::parse_composer_lock,
-        LockfileKind::Requirements | LockfileKind::PackageLock => {
+        LockfileKind::Requirements | LockfileKind::PackageLock | LockfileKind::PyprojectToml => {
             // Invariant: Handled above via early returns before this dispatch block.
             unreachable!("handled above")
         }
@@ -222,6 +254,7 @@ pub fn parse_file(path: impl AsRef<Path>) -> Result<Vec<Dependency>, ParseError>
         LockfileKind::PnpmLock => pnpm::parse_pnpm_lock,
         LockfileKind::Requirements => pypi::parse_requirements,
         LockfileKind::PoetryLock => pypi::parse_poetry_lock,
+        LockfileKind::PyprojectToml => pypi::parse_pyproject,
         LockfileKind::BunLock => bun::parse_bun_lock,
         LockfileKind::UvLock => pypi::parse_uv_lock,
         LockfileKind::PdmLock => pypi::parse_pdm_lock,
@@ -333,6 +366,7 @@ mod tests {
             ("Pipfile.lock", Some(LockfileKind::PipfileLock)),
             ("Cargo.lock", Some(LockfileKind::CargoLock)),
             ("package.json", Some(LockfileKind::PackageJson)),
+            ("pyproject.toml", Some(LockfileKind::PyprojectToml)),
             ("bun.lock", Some(LockfileKind::BunLock)),
             ("uv.lock", Some(LockfileKind::UvLock)),
             ("pdm.lock", Some(LockfileKind::PdmLock)),

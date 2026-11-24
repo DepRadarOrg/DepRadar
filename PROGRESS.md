@@ -17,6 +17,24 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** genda-benjamin
 - **Closes:** #444
 
+### Scanner — Read dependencies from `pyproject.toml` — #327
+
+- **What:** `pyproject.toml` is a recognised file (`LockfileKind::PyprojectToml`).
+  `pypi::parse_pyproject_with_warnings` reads PEP 621
+  `[project.dependencies]` and every group of
+  `[project.optional-dependencies]` as direct dependencies, parsing each
+  PEP 508 entry the same way as a `requirements.txt` line (extras and
+  environment markers are ignored). Entries without an exact `==` / `===` pin
+  are skipped with a warning, and a pin listed in several groups is reported
+  once. `parse_lockfile` and `parse_file` dispatch to it, so `depradar scan`
+  and directory scans pick up `pyproject.toml` files.
+- **Tests:** `pyproject_keeps_pinned_entries_and_warns_about_the_rest` in
+  `src/lockfile/pypi.rs` runs the new `tests/fixtures/pyproject.toml`
+  (pinned, ranged and extras entries); `detect` covers the new file name. Not
+  run yet.
+- **By:** Muhammadcodes112
+- **Closes:** #327
+
 ### Scanner — Detect `npm-shrinkwrap.json` — #328
 
 - **What:** `lockfile::detect` maps `npm-shrinkwrap.json` to
@@ -30,21 +48,56 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** cyfer-codes
 - **Closes:** #328
 
-### Typosquat — RubyGems popular-package dataset — #334
+### Scanner — Flag dependencies installed from git, URLs or local paths — #329
 
-- **What:** `data/popular-packages/rubygems-top1000.json` holds the 1000
-  most-downloaded gems, ranked by rubygems.org total download counts via the
-  BestGems ranking (rubygems.org's own stats page stops at 100).
-  `scripts/update-datasets.py rubygems` regenerates it, and
-  `typosquat::dataset` loads it alongside the npm, PyPI and crates.io lists,
-  so RubyGems names are scored and ranked like the others. The dataset
-  README documents the source.
-- **Tests:** the dataset validation test now covers the RubyGems file (unique,
-  trimmed, lowercase, valid gem names); the loader test checks `rails` and
-  `nokogiri`; `rubygems_typosquat_is_flagged` in `src/typosquat/scanner.rs`
-  flags `nokogri` as one edit from `nokogiri`. Not run yet.
+- **What:** `Dependency` gains a `source` field holding the git URL, tarball
+  URL or `file:` path a package was installed from when that isn't the
+  registry. The parsers fill it from npm's URL `version` or `file:` `resolved`,
+  the Yarn v1 entry header (`pkg@git+https://…`, `pkg@file:…`), the pnpm
+  `resolution` block (`repo`/`commit`, `tarball`, `directory`), and Cargo's
+  `git+…` `source`. `scan_lockfile` reports each such package as a new
+  `FindingKind::NonRegistrySource`, rated **low** in `severity_of`, with an
+  issue-ref kind of `non-registry-source` and a matching SARIF rule.
+  `docs/severity.md` and `docs/issue-ref.md` document the new kind.
+- **Tests:** `git_and_file_dependencies_are_flagged_as_non_registry` in
+  `tests/scan_lockfile.rs` scans the new `tests/fixtures/non-registry/yarn.lock`
+  (one git and one `file:` dependency) and expects two findings; unit tests
+  cover the pnpm and Cargo sources. The `npm-basic` fixture's `file:` entry
+  is now flagged too, so the scan and SARIF tests that use it expect that
+  finding. Not run yet.
+- **By:** Muhammadcodes112
+- **Closes:** #329
+
+### Scanner — Report each package once across a monorepo scan — #330
+
+- **What:** `DirReport::findings()` in `src/pipeline.rs` groups identical
+  findings (same package, version, ecosystem and kind) from every lockfile
+  into one `DirFinding` that lists the lockfiles it came from. The text output
+  of a directory scan now prints that grouped list once, e.g.
+  `requests@2.19.0 [direct]: known vulnerability … (in services/api/requirements.txt, services/worker/requirements.txt)`,
+  and each `== lockfile ==` section keeps only its scan line, suppressions,
+  warnings and summary. Per-lockfile `Report::findings` and the JSON output
+  are unchanged.
+- **Tests:** `scan_dir_reports_a_shared_finding_once_with_every_lockfile` in
+  `tests/scan_dir.rs`: two lockfiles with the same vulnerable package give one
+  finding with two paths. Not run yet.
+- **By:** Muhammadcodes112
+- **Closes:** #330
+
+### Scanner — Report unpinned dependencies — #331
+
+- **What:** `Summary` gains an `unpinned` count of packages with no exact
+  version (such as `requests>=2`), which are never sent for a CVE lookup.
+  `Report::unpinned()` lists their names. The text output (`Report`'s
+  `Display` and `report::text`) adds an `Unpinned (N, ...)` section and
+  `N unpinned` to the summary line; the JSON report adds `summary.unpinned`
+  and an `unpinned` name list.
+- **Tests:** `counts_and_lists_unpinned_requirements` in
+  `tests/scan_lockfile.rs` and `scan_reports_unpinned_requirements_in_text_and_json`
+  in `tests/cli.rs`, over the new `tests/fixtures/pypi-unpinned/requirements.txt`
+  fixture (two unpinned lines). Not run yet.
 - **By:** cyfer-codes
-- **Closes:** #334
+- **Closes:** #331
 
 ### Scanner — Dependency-confusion check for private package names — #332
 
@@ -61,20 +114,35 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** cyfer-codes
 - **Closes:** #332
 
-### Scanner — Report unpinned dependencies — #331
+### Scanner — Scan only lockfiles changed since a git ref — #333
 
-- **What:** `Summary` gains an `unpinned` count of packages with no exact
-  version (such as `requests>=2`), which are never sent for a CVE lookup.
-  `Report::unpinned()` lists their names. The text output (`Report`'s
-  `Display` and `report::text`) adds an `Unpinned (N, ...)` section and
-  `N unpinned` to the summary line; the JSON report adds `summary.unpinned`
-  and an `unpinned` name list.
-- **Tests:** `counts_and_lists_unpinned_requirements` in
-  `tests/scan_lockfile.rs` and `scan_reports_unpinned_requirements_in_text_and_json`
-  in `tests/cli.rs`, over the new `tests/fixtures/pypi-unpinned/requirements.txt`
-  fixture (two unpinned lines). Not run yet.
+- **What:** `depradar scan <dir> --changed-since <git-ref>` scans only the
+  lockfiles that `git diff --name-only <git-ref>` lists, so CI on a large
+  monorepo checks just the lockfiles a PR touched. The library side is
+  `pipeline::scan_dir_changed_since` and `pipeline::changed_files`;
+  unchanged lockfiles are skipped before they are parsed or sent to OSV. An
+  unknown ref is an error rather than an empty scan.
+- **Tests:** `scan_dir_changed_since_scans_only_changed_lockfiles` in
+  `tests/scan_dir.rs` builds a temp git repo with two lockfiles, changes one,
+  and checks that only that one is scanned. Not run yet.
+- **By:** Muhammadcodes112
+- **Closes:** #333
+
+### Typosquat — RubyGems popular-package dataset — #334
+
+- **What:** `data/popular-packages/rubygems-top1000.json` holds the 1000
+  most-downloaded gems, ranked by rubygems.org total download counts via the
+  BestGems ranking (rubygems.org's own stats page stops at 100).
+  `scripts/update-datasets.py rubygems` regenerates it, and
+  `typosquat::dataset` loads it alongside the npm, PyPI and crates.io lists,
+  so RubyGems names are scored and ranked like the others. The dataset
+  README documents the source.
+- **Tests:** the dataset validation test now covers the RubyGems file (unique,
+  trimmed, lowercase, valid gem names); the loader test checks `rails` and
+  `nokogiri`; `rubygems_typosquat_is_flagged` in `src/typosquat/scanner.rs`
+  flags `nokogri` as one edit from `nokogiri`. Not run yet.
 - **By:** cyfer-codes
-- **Closes:** #331
+- **Closes:** #334
 
 ### Docs — Contract error codes reference — #449
 
@@ -635,6 +703,51 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** #<this issue>
 - **Status:** In review.
 
+
+### Typosquat — Go and Packagist popular-package datasets — #335, #336
+
+- **What:** Adds `data/popular-packages/go-top1000.json` (the 1000 most
+  imported Go modules, from deps.dev / pkg.go.dev import counts) and
+  `data/popular-packages/packagist-top1000.json` (the 1000 most-installed
+  Composer packages from packagist.org's popular list).
+  `scripts/update-datasets.py` gains `go` and `packagist` sources that
+  regenerate both files in the existing format, and `typosquat::dataset`
+  loads them for the `Go` and `Packagist` ecosystems, so names in those
+  ecosystems are scored and ranked like the others. The dataset README
+  documents both sources.
+- **Tests:** the dataset validation test now covers both files (unique,
+  trimmed, valid module/package names); the loader test checks known
+  entries (`github.com/gin-gonic/gin`, `symfony/console`); a known Go
+  module typosquat and a known Packagist typosquat are flagged in
+  `src/typosquat/scanner.rs`. Not run yet.
+- **By:** cyfer-codes
+- **Closes:** #335, #336
+
+### Typosquat — separator-swap signal (`-`, `_`, `.`) — #339
+
+- **What:** Adds a signal for names that match a popular package once
+  separators are normalised, so `date_fns` (for `date-fns`) and
+  `lodash.merge` (for `lodash-merge`) are caught even when they are more
+  than one cheap edit away. PyPI is skipped, since PEP 503 already treats
+  `-`, `_` and `.` as the same name. The signal is reported on
+  `ScanResult` and contributes to the confidence score.
+- **Tests:** `-`↔`_` and `.`↔`-` swaps on npm and crates.io are flagged;
+  the same swap on PyPI is not. Not run yet.
+- **By:** cyfer-codes
+- **Closes:** #339
+
+### Typosquat — bitsquatting signal — #341
+
+- **What:** Adds a bitsquatting signal: for each character of a candidate
+  name, a single bit flip is applied and the result is looked up in the
+  dataset, so names one bit away from a popular package (`lodasj` for
+  `lodash`) are flagged. The signal is reported on `ScanResult` and
+  contributes to the confidence score.
+- **Tests:** three bit-flipped examples are flagged and three negatives
+  (the real package, an unrelated name, a two-bit-flip name) are not. Not
+  run yet.
+- **By:** cyfer-codes
+- **Closes:** #341
 
 ### Dependency licenses and sources — `cargo deny` — #163
 
@@ -1724,6 +1837,135 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
   checked.
 - **By:** ALLEN-AYODEJI
 - **Closes:** #154
+- **Status:** In review.
+
+### Typosquat — grow the npm dataset to the top 5,000 packages — #338
+
+- **What:** `data/popular-packages/npm-top1000.json` is regenerated as the
+  top 5,000 npm packages by downloads (the file keeps its historical name so
+  the loader and validation tests are unchanged), and
+  `scripts/update-datasets.py` now fetches 5,000 npm names instead of 1,000.
+  Mid-popularity squats that previously fell outside the reference list are
+  now scored.
+- **Benchmarks:** `benches/typosquat.rs` `score_package` numbers before/after
+  are recorded in the PR description; no benchmark regressed by more than
+  20% (the BK-tree lookup keeps scoring sub-linear in dataset size).
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass, including the dataset validation test over
+  the enlarged file.
+- **Closes:** #338
+- **Status:** In review.
+
+### Typosquat — detect ecosystem affixes (`py-`, `-js`, `node-`, `-rs`) — #340
+
+- **What:** [`src/typosquat/combosquat.rs`](src/typosquat/combosquat.rs)
+  strips common per-ecosystem affixes (`py-`/`-py` for PyPI, `node-`/`-js`
+  for npm, `-rs`/`rs-` for crates.io) and compares the stripped name to the
+  dataset, so names like `requests-py`, `pyrequests` or `node-lodash` are
+  caught. A dedicated `affix_match` signal is reported on `ScanResult` and
+  contributes to the confidence score.
+- **Tests:** at least three affixes per ecosystem are covered, plus
+  allowlisted real packages (e.g. `node-fetch`, `pyyaml`) that must not be
+  flagged.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #340
+- **Status:** In review.
+
+### Typosquat — fail CI when a popular-package dataset is stale — #344
+
+- **What:** Each file in `data/popular-packages/` now carries a
+  `generated_at` date, and [`src/typosquat/dataset.rs`](src/typosquat/dataset.rs)
+  gains a test that fails when a dataset's `generated_at` is older than 180
+  days. `scripts/update-datasets.py` writes the date on every regeneration.
+- **Tests:** the staleness test fails on an old date and passes on today's.
+- **Verified:** the workflow runs green on the PR; `cargo fmt`,
+  `cargo clippy -- -D warnings` and `cargo test --workspace` pass.
+- **Closes:** #344
+- **Status:** In review.
+
+### CVE — treat OSV `MAL-` advisories as critical malicious-package findings — #345
+
+- **What:** [`src/cve/`](src/cve/) detects OSV advisory IDs beginning with
+  `MAL-` and maps them to `Severity::Critical` with a "malicious package"
+  label, so known malware is reported distinctly from ordinary
+  vulnerabilities. [`src/report/`](src/report/) renders the label in the text
+  and JSON output.
+- **Tests:** a mock-server test feeds a `MAL-` hit and asserts it renders as
+  critical with the malware label.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #345
+- **Status:** In review.
+
+### CVE — Flag vulnerabilities in CISA's Known Exploited Vulnerabilities list — #346
+
+- **What:** Adds `src/cve/kev.rs`, which downloads CISA's KEV JSON feed
+  (`https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`)
+  and caches it on disk next to the OSV cache, refreshing it once the cached
+  copy is older than a day. The feed's `cveID` values are collected into a
+  set, and each finding's CVE aliases are checked against it; a match sets
+  `known_exploited: true` on the finding. The flag is shown in the text
+  report, in the JSON report (`known_exploited`) and in the SARIF result
+  properties.
+- **Tests:** A small KEV fixture (two CVEs) is served by a mock server, and
+  a test asserts that the finding whose alias is in the feed is marked
+  `known_exploited` while a finding with an unrelated CVE is not. A JSON
+  output test checks the field appears in the report.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #346
+- **Status:** In review.
+
+### CVE — Add EPSS exploit-probability scores to findings — #347
+
+- **What:** Adds `src/cve/epss.rs`, which queries the FIRST EPSS API
+  (`https://api.first.org/data/v1/epss?cve=…`) for a finding's CVE aliases
+  and stores the highest returned score on the finding as `epss_score`.
+  Responses are cached with the OSV cache, keyed by the CVE ID, so repeated
+  scans don't re-query the API. The score is printed in the text report,
+  added to the JSON report (`epss_score`) and included in the SARIF result
+  properties.
+- **Tests:** A mock-server test serves a fixed EPSS response and asserts the
+  score appears in the JSON output for the matching finding.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #347
+- **Status:** In review.
+
+### CLI — `depradar cache info` and `depradar cache clear` — #349
+
+- **What:** Adds a `cache` subcommand to [`src/bin/depradar.rs`](src/bin/depradar.rs).
+  `depradar cache info` prints the OSV cache directory path, the number of
+  cached entries and their total size; `depradar cache clear` deletes the
+  cache directory. Both use the path helpers in
+  [`src/cve/cache.rs`](src/cve/cache.rs), and the cache directory can be
+  overridden (e.g. for tests) so the real OS cache is never touched.
+- **Tests:** `assert_cmd` CLI tests in [`tests/cli.rs`](tests/cli.rs) run
+  both commands against a temporary cache directory: `cache info` reports
+  the path and entry count, and `cache clear` removes the directory.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #349
+- **Status:** In review.
+
+### CVE — PEP 440 version comparison for PyPI fixed versions — #350
+
+- **What:** Adds PEP 440 ordering to [`src/cve/remediation.rs`](src/cve/remediation.rs)
+  so PyPI fixed-version suggestions compare versions correctly instead of as
+  semver. The comparison handles epochs (`1!2.0`), pre-releases
+  (`2.0rc1`, `2.0a1`, `2.0b2`), post-releases (`1.0.post1`) and dev releases,
+  and normalises the common spellings (`rc`, `c`, `pre`, `preview`, `-`/`_`
+  separators). PyPI remediation uses this ordering; other ecosystems keep
+  semver.
+- **Tests:** Unit tests cover pre-release ordering (`2.0rc1 < 2.0`), post-release
+  ordering (`1.0 < 1.0.post1`) and epoch ordering (`1!1.0 > 2.0`), plus the
+  fixed-version suggestion picking the lowest fixed version above the
+  installed one.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #350
+- **Status:** In review.
 - **Status:** In review.
 
 - #310 — Scan checked-out repositories without executing their contents and encrypt nightly ecosystem reports for the disclosure team (@willy-de7)

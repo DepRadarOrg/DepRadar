@@ -127,7 +127,15 @@ fn dedupes_pins_and_queries_osv_in_one_batch() {
     );
     assert_eq!(report.summary.packages, 4);
     assert_eq!(report.summary.queried, 3);
-    assert!(report.findings.is_empty());
+    // Only the local `file:` install is flagged; nothing is vulnerable.
+    assert!(
+        report
+            .findings
+            .iter()
+            .all(|f| matches!(f.kind, FindingKind::NonRegistrySource { .. })),
+        "findings: {:#?}",
+        report.findings
+    );
 }
 
 #[test]
@@ -140,7 +148,10 @@ fn reports_parse_warnings_separately_from_findings() {
 
     let report = scan_lockfile(fixture("npm-basic/package-lock.json"), &opts).unwrap();
 
-    assert!(report.findings.is_empty());
+    // The unversioned package is a local `file:` install: one finding, and
+    // its missing version is a warning rather than a second finding.
+    assert_eq!(report.findings.len(), 1, "findings: {:#?}", report.findings);
+    assert_eq!(report.findings[0].package, "zzz-unversioned-internal-fixture");
     assert_eq!(report.warnings.len(), 1, "warnings: {:#?}", report.warnings);
     assert!(report.warnings[0].contains("zzz-unversioned-internal-fixture"));
     assert_eq!(report.summary.warnings, 1);
@@ -222,6 +233,39 @@ fn ignore_file_suppresses_matching_findings_until_they_expire() {
         "warnings: {:#?}",
         expired.warnings
     );
+}
+
+#[test]
+fn git_and_file_dependencies_are_flagged_as_non_registry() {
+    let opts = ScanOptions {
+        typosquat: false,
+        advisories: None,
+        ..ScanOptions::default()
+    };
+
+    let report = scan_lockfile(fixture("non-registry/yarn.lock"), &opts).unwrap();
+
+    let flagged: Vec<(&str, &str)> = report
+        .findings
+        .iter()
+        .filter_map(|f| match &f.kind {
+            FindingKind::NonRegistrySource { source } => {
+                Some((f.package.as_str(), source.as_str()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        flagged,
+        [
+            (
+                "left-pad",
+                "git+https://github.com/stevemao/left-pad.git#v1.3.0"
+            ),
+            ("local-utils", "file:./packages/local-utils"),
+        ]
+    );
+    assert_eq!(report.findings.len(), 2, "{:#?}", report.findings);
 }
 
 #[test]

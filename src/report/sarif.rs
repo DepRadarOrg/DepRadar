@@ -1,9 +1,9 @@
 //! [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 //! output, the format GitHub code scanning ingests.
 //!
-//! The run declares one rule per [`FindingKind`] (`typosquat` and
-//! `vulnerability`) and one result per finding. Each result points at the
-//! scanned lockfile, on the first line that names the package when the
+//! The run declares one rule per [`FindingKind`] (`typosquat`,
+//! `vulnerability`, `non-registry-source`, `deprecated` and `license`) and one result per finding.
+//! Each result points at the scanned lockfile, on the first line that names the package when the
 //! lockfile's contents are available. Severity maps to the SARIF `level`
 //! (critical/high → `error`, medium → `warning`, low → `note`) and to the
 //! `security-severity` score GitHub uses to rank security alerts.
@@ -11,9 +11,9 @@
 //! Upload the file with
 //! [`github/codeql-action/upload-sarif`](https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github).
 
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
-use super::{label, severity_of, AdvisorySeverities, Severity};
+use super::{is_malicious, label, severity_of, AdvisorySeverities, Severity};
 use crate::model::{Finding, FindingKind};
 use crate::pipeline::Report;
 
@@ -31,7 +31,7 @@ struct Rule {
     default_severity: Severity,
 }
 
-const RULES: [Rule; 4] = [
+const RULES: [Rule; 5] = [
     Rule {
         id: "typosquat",
         name: "Typosquat",
@@ -48,6 +48,14 @@ const RULES: [Rule; 4] = [
         full: "OSV reports a published security advisory affecting the exact version \
                pinned in the lockfile.",
         default_severity: Severity::High,
+    },
+    Rule {
+        id: "non-registry-source",
+        name: "NonRegistrySource",
+        short: "Dependency is installed from outside the registry",
+        full: "The package comes from a git URL, a tarball URL or a local path instead of \
+               the package registry, so registry-side checks don't cover it.",
+        default_severity: Severity::Low,
     },
     Rule {
         id: "deprecated",
@@ -69,8 +77,9 @@ fn rule_index(kind: &FindingKind) -> usize {
     match kind {
         FindingKind::Typosquat { .. } => 0,
         FindingKind::Vulnerability { .. } => 1,
-        FindingKind::Deprecated { .. } => 2,
-        FindingKind::License { .. } => 3,
+        FindingKind::NonRegistrySource { .. } => 2,
+        FindingKind::Deprecated { .. } => 3,
+        FindingKind::License { .. } => 4,
     }
 }
 
@@ -151,9 +160,10 @@ fn result(
         .and_then(|contents| line_of(contents, &finding.package))
         .unwrap_or(1);
     let advisory = match &finding.kind {
-        FindingKind::Vulnerability { advisory_id } => advisory_id.as_str(),
+        FindingKind::Vulnerability { advisory_id, .. } => advisory_id.as_str(),
         _ => "",
     };
+    let malicious = is_malicious(finding);
     let fingerprint = format!(
         "{}:{}:{}@{}:{advisory}",
         RULES[index].id,
@@ -161,6 +171,36 @@ fn result(
         finding.package,
         finding.version.as_deref().unwrap_or("")
     );
+    let mut tags = vec!["security", "supply-chain"];
+    if malicious {
+        tags.push("malware");
+    }
+
+    let mut properties = Map::new();
+    properties.insert("package".into(), json!(finding.package));
+    properties.insert("version".into(), json!(finding.version));
+    properties.insert("ecosystem".into(), json!(finding.ecosystem.as_osv_str()));
+    properties.insert("direct".into(), json!(finding.direct));
+    properties.insert("severity".into(), json!(label(severity)));
+    properties.insert(
+        "security-severity".into(),
+        json!(security_severity(severity)),
+    );
+    properties.insert("malicious".into(), json!(malicious));
+    properties.insert("tags".into(), json!(tags));
+    if let FindingKind::Vulnerability {
+        known_exploited,
+        epss_score,
+        ..
+    } = &finding.kind
+    {
+        if let Some(known_exploited) = known_exploited {
+            properties.insert("known_exploited".into(), json!(known_exploited));
+        }
+        if let Some(epss_score) = epss_score {
+            properties.insert("epss_score".into(), json!(epss_score));
+        }
+    }
 
     json!({
         "ruleId": RULES[index].id,
@@ -174,14 +214,7 @@ fn result(
             },
         }],
         "partialFingerprints": { "depradar/v1": fingerprint },
-        "properties": {
-            "package": finding.package,
-            "version": finding.version,
-            "ecosystem": finding.ecosystem.as_osv_str(),
-            "direct": finding.direct,
-            "severity": label(severity),
-            "security-severity": security_severity(severity),
-        },
+        "properties": Value::Object(properties),
     })
 }
 
@@ -232,5 +265,74 @@ mod tests {
         assert_eq!(level(Severity::High), "error");
         assert_eq!(level(Severity::Medium), "warning");
         assert_eq!(level(Severity::Low), "note");
+    }
+
+    #[test]
+    fn renders_malicious_advisory_as_critical_error() {
+        use crate::model::{Ecosystem, Finding};
+        use std::path::PathBuf;
+
+        let finding = Finding {
+            kind: FindingKind::Vulnerability {
+                advisory_id: "MAL-2024-1234".to_string(),
+                known_exploited: None,
+                epss_score: None,
+            },
+            ecosystem: Ecosystem::Npm,
+            package: "evil-pkg".to_string(),
+            version: Some("1.0.0".to_string()),
+            direct: true,
+        };
+        let report = Report {
+            path: PathBuf::from("package-lock.json"),
+            findings: vec![finding],
+        };
+        let sarif = to_sarif(&report, &AdvisorySeverities::default(), None);
+        let result = &sarif["runs"][0]["results"][0];
+        assert_eq!(result["level"], "error");
+        assert_eq!(result["properties"]["severity"], "critical");
+        assert_eq!(result["properties"]["malicious"], true);
+        assert!(result["properties"]["tags"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tag| tag == "malware"));
+    }
+
+    #[test]
+    fn emits_known_exploited_and_epss_properties() {
+        use crate::model::{Ecosystem, Finding};
+
+        let finding = Finding {
+            kind: FindingKind::Vulnerability {
+                advisory_id: "GHSA-xxxx".into(),
+                known_exploited: Some(true),
+                epss_score: Some(0.42),
+            },
+            ecosystem: Ecosystem::Npm,
+            package: "left-pad".into(),
+            version: Some("1.0.0".into()),
+            direct: true,
+        };
+        let advisories = AdvisorySeverities::default();
+        let value = result(&finding, &advisories, "package-lock.json", None);
+        let properties = &value["properties"];
+        assert_eq!(properties["known_exploited"], json!(true));
+        assert_eq!(properties["epss_score"], json!(0.42));
+
+        let plain = Finding {
+            kind: FindingKind::Vulnerability {
+                advisory_id: "GHSA-yyyy".into(),
+                known_exploited: None,
+                epss_score: None,
+            },
+            ecosystem: Ecosystem::Npm,
+            package: "left-pad".into(),
+            version: Some("1.0.0".into()),
+            direct: true,
+        };
+        let value = result(&plain, &advisories, "package-lock.json", None);
+        assert!(value["properties"].get("known_exploited").is_none());
+        assert!(value["properties"].get("epss_score").is_none());
     }
 }

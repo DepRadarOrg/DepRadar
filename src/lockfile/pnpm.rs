@@ -20,6 +20,37 @@ struct PnpmPackage {
     /// Present in v6 (`dev: true`/`false`); v9 dropped it.
     #[serde(default)]
     dev: Option<bool>,
+    /// Recorded for packages whose key doesn't carry a registry
+    /// `name@version` (git, tarball and directory installs).
+    name: Option<String>,
+    version: Option<String>,
+    resolution: Option<PnpmResolution>,
+}
+
+/// Where pnpm fetched a package from. Registry packages only carry an
+/// `integrity`; the other fields mark non-registry installs.
+#[derive(Debug, Default, Deserialize)]
+struct PnpmResolution {
+    tarball: Option<String>,
+    repo: Option<String>,
+    commit: Option<String>,
+    directory: Option<String>,
+}
+
+impl PnpmResolution {
+    /// The non-registry location this resolution points at, if any.
+    fn source(&self) -> Option<String> {
+        if let Some(repo) = &self.repo {
+            return Some(match &self.commit {
+                Some(commit) => format!("{repo}#{commit}"),
+                None => repo.clone(),
+            });
+        }
+        if let Some(directory) = &self.directory {
+            return Some(format!("file:{directory}"));
+        }
+        self.tarball.clone()
+    }
 }
 
 /// Parses a `pnpm-lock.yaml` (lockfile v6 or v9) into its locked
@@ -31,6 +62,10 @@ struct PnpmPackage {
 /// which is dropped. `dev` follows the v6 `dev:` field and is `false` for
 /// v9, which doesn't record it. The lockfile doesn't mark which packages the
 /// project declares itself, so `direct` is always `false`.
+///
+/// Git, tarball and directory installs keep their location in
+/// [`Dependency::source`], taking their name and version from the entry's
+/// own `name` / `version` fields since the key doesn't hold a registry pin.
 pub fn parse_pnpm_lock(contents: &str) -> Result<Vec<Dependency>, ParseError> {
     let lock: PnpmLock = serde_yaml::from_str(contents)?;
 
@@ -38,14 +73,26 @@ pub fn parse_pnpm_lock(contents: &str) -> Result<Vec<Dependency>, ParseError> {
         .packages
         .into_iter()
         .filter_map(|(key, package)| {
-            let (name, version) = split_key(&key)?;
+            let source = package.resolution.as_ref().and_then(PnpmResolution::source);
+            let (name, version) = match (split_key(&key), &source) {
+                (Some((name, version)), None) => (name.to_string(), Some(version.to_string())),
+                (split, Some(_)) => (
+                    package
+                        .name
+                        .clone()
+                        .or_else(|| split.map(|(name, _)| name.to_string()))?,
+                    package.version.clone(),
+                ),
+                (None, None) => return None,
+            };
             Some(Dependency {
-                name: name.to_string(),
-                version: Some(version.to_string()),
+                name,
+                version,
                 ecosystem: Ecosystem::Npm,
                 direct: false,
                 dev: package.dev.unwrap_or(false),
                 path: Vec::new(),
+                source,
             })
         })
         .collect())
@@ -126,5 +173,37 @@ mod tests {
         assert_eq!(split_key("@s/a@1.0.0"), Some(("@s/a", "1.0.0")));
         assert_eq!(split_key("a@1.0.0(b@2.0.0)"), Some(("a", "1.0.0")));
         assert_eq!(split_key("no-version"), None);
+    }
+
+    #[test]
+    fn records_git_and_directory_sources() {
+        let lock = r#"
+lockfileVersion: '6.0'
+packages:
+  /express@4.18.2:
+    resolution: {integrity: sha512-aaa}
+  github.com/example/forked/0123abcd:
+    resolution: {tarball: https://codeload.github.com/example/forked/tar.gz/0123abcd}
+    name: forked
+    version: 1.0.0
+  file:packages/local-utils:
+    resolution: {directory: packages/local-utils, type: directory}
+    name: local-utils
+    version: 0.1.0
+"#;
+        let deps = parse_pnpm_lock(lock).unwrap();
+        assert_eq!(deps.len(), 3);
+        assert_eq!(find(&deps, "express").source, None);
+
+        let forked = find(&deps, "forked");
+        assert_eq!(forked.version.as_deref(), Some("1.0.0"));
+        assert_eq!(
+            forked.source.as_deref(),
+            Some("https://codeload.github.com/example/forked/tar.gz/0123abcd")
+        );
+        assert_eq!(
+            find(&deps, "local-utils").source.as_deref(),
+            Some("file:packages/local-utils")
+        );
     }
 }

@@ -40,7 +40,9 @@ covered by the repository's [MIT license](../../LICENSE).
 | [`package-lock-v1.json`](package-lock-v1.json) | `package-lock.json` v1 | not referenced by a test yet |
 | [`package-lock-v3.json`](package-lock-v3.json) | `package-lock.json` v3 | not referenced by a test yet |
 | [`package.json`](package.json) | `package.json` | `src/lockfile/mod.rs`, `src/lockfile/npm.rs` |
+| [`non-registry/yarn.lock`](non-registry/yarn.lock) | `yarn.lock` v1 (one git and one `file:` dependency) | `tests/scan_lockfile.rs` |
 | [`pypi-basic/requirements.txt`](pypi-basic/requirements.txt) | `requirements.txt` | `tests/lockfile.rs` |
+| [`pyproject.toml`](pyproject.toml) | PEP 621 `pyproject.toml` (pinned, ranged and extras entries) | `src/lockfile/pypi.rs` |
 | [`pypi-unpinned/requirements.txt`](pypi-unpinned/requirements.txt) | `requirements.txt` (two unpinned lines) | `tests/scan_lockfile.rs`, `tests/cli.rs` |
 | [`Pipfile.lock`](Pipfile.lock) | `Pipfile.lock` | `src/lockfile/mod.rs`, `src/lockfile/pypi.rs` |
 | [`bun.lock`](bun.lock) | `bun.lock` | `src/lockfile/bun.rs`, `tests/lockfile.rs` |

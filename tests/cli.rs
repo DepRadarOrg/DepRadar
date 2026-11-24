@@ -554,3 +554,160 @@ fn explain_unknown_advisory_exits_with_code_2() {
         "expected an error message on stderr"
     );
 }
+
+// ── depradar cache tests ─────────────────────────────────────────────────────
+
+/// Points the binary at `dir` as its OSV cache directory.
+fn cache_dir_command(dir: &Path) -> Command {
+    let mut cmd = depradar();
+    cmd.env("DEPRADAR_CACHE_DIR", dir);
+    cmd
+}
+
+#[test]
+fn cache_info_reports_path_count_and_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("osv-cache");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("entry-one.json"), b"{\"id\":\"GHSA-1\"}").unwrap();
+    std::fs::write(cache.join("entry-two.json"), b"{\"id\":\"GHSA-2\"}").unwrap();
+
+    let output = cache_dir_command(&cache).args(["cache", "info"]).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "cache info failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(&cache.to_string_lossy().to_string()),
+        "cache path missing from output: {stdout}"
+    );
+    assert!(
+        stdout.to_lowercase().contains("entries"),
+        "entry count missing from output: {stdout}"
+    );
+    assert!(stdout.contains('2'), "entry count value missing: {stdout}");
+    assert!(
+        stdout.to_lowercase().contains("size"),
+        "size missing from output: {stdout}"
+    );
+}
+
+#[test]
+fn cache_info_on_missing_dir_reports_zero_entries() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("does-not-exist");
+
+    let output = cache_dir_command(&cache).args(["cache", "info"]).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "cache info failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains('0'), "expected zero entries: {stdout}");
+}
+
+#[test]
+fn cache_clear_removes_the_cache_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("osv-cache");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("entry.json"), b"{}").unwrap();
+    assert!(cache.exists());
+
+    let output = cache_dir_command(&cache).args(["cache", "clear"]).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "cache clear failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!cache.exists(), "cache directory should have been removed");
+}
+
+#[test]
+fn cache_clear_on_missing_dir_succeeds() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = dir.path().join("never-created");
+
+    let output = cache_dir_command(&cache).args(["cache", "clear"]).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "cache clear on missing dir should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+// ── EPSS score tests ─────────────────────────────────────────────────────────
+
+/// Canned FIRST EPSS API response for `CVE-2024-0001`.
+const EPSS_RESPONSE_JSON: &str = r#"{
+  "status": "OK",
+  "status-code": 200,
+  "version": "1.0",
+  "access": "public",
+  "total": 1,
+  "offset": 0,
+  "limit": 1,
+  "data": [
+    { "cve": "CVE-2024-0001", "epss": "0.97123", "percentile": "0.99876", "date": "2024-06-01" }
+  ]
+}"#;
+
+#[test]
+fn scan_json_includes_epss_score_from_mock_server() {
+    let mut server = mockito::Server::new();
+    // OSV querybatch: report the advisory for `example-package`.
+    server
+        .mock("POST", "/v1/querybatch")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{
+              "results": [
+                { "vulns": [{ "id": "GHSA-aaaa-bbbb-cccc", "modified": "2024-06-01T00:00:00Z" }] }
+              ]
+            }"#,
+        )
+        .create();
+    // OSV vuln detail: the advisory with a CVE alias.
+    server
+        .mock("GET", "/v1/vulns/GHSA-aaaa-bbbb-cccc")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(EXPLAIN_ADVISORY_JSON)
+        .create();
+    // FIRST EPSS API: the score for the CVE alias.
+    server
+        .mock("GET", mockito::Matcher::Regex(r"^/data/v1/epss.*$".to_string()))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(EPSS_RESPONSE_JSON)
+        .create();
+
+    let cache = tempfile::tempdir().unwrap();
+    let output = depradar()
+        .env("DEPRADAR_OSV_BASE_URL", server.url())
+        .env("DEPRADAR_EPSS_BASE_URL", server.url())
+        .env("DEPRADAR_CACHE_DIR", cache.path())
+        .args(["--format", "json", "scan"])
+        .arg(fixture("npm-vulnerable"))
+        .output()
+        .unwrap();
+
+    let json = stdout_json(&output);
+    let rendered = json.to_string();
+    assert!(
+        rendered.contains("0.97123") || rendered.contains("0.9712"),
+        "EPSS score missing from JSON output: {json}"
+    );
+    assert!(
+        rendered.contains("epss"),
+        "EPSS field missing from JSON output: {json}"
+    );
+}

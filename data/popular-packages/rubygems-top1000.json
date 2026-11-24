@@ -1,4 +1,6 @@
-[
+{
+  "generated_at": "2025-01-01",
+  "packages": [
   "bundler",
   "aws-sdk-core",
   "aws-sigv4",
@@ -999,4 +1001,5 @@
   "timeliness",
   "aws-sdk-iotsecuretunneling",
   "aws-sdk-migrationhubconfig"
-]
+  ]
+}

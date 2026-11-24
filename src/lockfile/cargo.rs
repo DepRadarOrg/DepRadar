@@ -25,9 +25,10 @@ struct CargoLockPackage {
 ///
 /// Every `[[package]]` entry with a `source` is returned with its pinned
 /// version. Entries without one are the workspace's own crates (or local
-/// path dependencies) and are skipped. `Cargo.lock` doesn't record which
-/// crates are declared directly or only used for development, so `direct`
-/// and `dev` are always `false`.
+/// path dependencies) and are skipped. Crates fetched from git keep their
+/// `git+...` source in [`Dependency::source`]. `Cargo.lock` doesn't record
+/// which crates are declared directly or only used for development, so
+/// `direct` and `dev` are always `false`.
 pub fn parse_cargo_lock(contents: &str) -> Result<Vec<Dependency>, ParseError> {
     let lock: CargoLock = toml::from_str(contents)?;
 
@@ -42,6 +43,7 @@ pub fn parse_cargo_lock(contents: &str) -> Result<Vec<Dependency>, ParseError> {
             direct: false,
             dev: false,
             path: Vec::new(),
+            source: package.source.filter(|source| source.starts_with("git+")),
         })
         .collect())
 }
@@ -100,6 +102,11 @@ mod tests {
         let names: Vec<&str> = deps.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, ["serde", "forked"]);
         assert_eq!(deps[0].version.as_deref(), Some("1.0.200"));
+        assert_eq!(deps[0].source, None);
+        assert_eq!(
+            deps[1].source.as_deref(),
+            Some("git+https://github.com/example/forked?branch=main#0123abcd")
+        );
     }
 
     #[test]

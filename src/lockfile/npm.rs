@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 
 use serde::Deserialize;
 
-use super::{LockfileError, ParseError, ParsedLockfile};
+use super::{is_non_registry_spec, LockfileError, ParseError, ParsedLockfile};
 use crate::model::{Dependency, Ecosystem};
 
 const NODE_MODULES: &str = "node_modules/";
@@ -106,6 +106,18 @@ pub fn parse_lock(contents: &str) -> Result<ParsedLockfile, LockfileError> {
             }
         };
 
+        // npm records git and remote-tarball installs as a URL `version`,
+        // and local tarballs as a `file:` `resolved`.
+        let source = match (&entry.version, &entry.resolved) {
+            (Some(version), _) if !is_registry_version(version) => Some(version.clone()),
+            (_, Some(resolved))
+                if is_non_registry_spec(resolved) && !resolved.starts_with("http") =>
+            {
+                Some(resolved.clone())
+            }
+            _ => None,
+        };
+
         dependencies.push(Dependency {
             path: paths.get(key.as_str()).cloned().unwrap_or_default(),
             name,
@@ -113,6 +125,7 @@ pub fn parse_lock(contents: &str) -> Result<ParsedLockfile, LockfileError> {
             ecosystem: Ecosystem::Npm,
             direct: direct_keys.contains(key),
             dev: false,
+            source,
         });
     }
 
@@ -270,6 +283,7 @@ pub fn parse_package_json(contents: &str) -> Result<Vec<Dependency>, ParseError>
             ecosystem: Ecosystem::Npm,
             direct: true,
             dev,
+            source: None,
         })
         .collect())
 }

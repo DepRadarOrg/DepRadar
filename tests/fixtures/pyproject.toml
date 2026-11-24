@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fixture-app"
+version = "0.1.0"
+dependencies = [
+    "requests==2.31.0",
+    "flask>=2.0",
+    "Django[bcrypt]==4.2.7 ; python_version >= '3.8'",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.0.0", "black~=24.1", "requests==2.31.0"]
+docs = ["sphinx[docs]===7.2.6"]
