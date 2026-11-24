@@ -8,11 +8,13 @@
 //! [`ScanResult`] reports which fired and how confident the overall verdict
 //! is.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
+use super::allowlist::builtin_allowlist;
 use super::bktree::BkTree;
 use super::combosquat::{affix_impersonation, combosquat};
 use super::dataset::{popular_packages, popularity_rank, rank};
@@ -287,6 +289,21 @@ fn popular_index() -> &'static BkTree<'static> {
     INDEX.get_or_init(|| BkTree::new(popular_packages()))
 }
 
+/// Merges the project-level allowlist from `depradar.toml`
+/// (`typosquat.allow`) with the built-in `data/allowlist.json` entries into
+/// one set of normalized names.
+///
+/// Both sides are normalized with [`normalize_name`] so that a config entry
+/// matches regardless of case or lookalike characters, exactly like the
+/// candidate being scored.
+pub fn merged_allowlist(project_allow: &[String]) -> HashSet<String> {
+    builtin_allowlist()
+        .iter()
+        .chain(project_allow.iter())
+        .map(|name| normalize_name(name))
+        .collect()
+}
+
 /// Folds every separator (`-`, `_`, `.`) to `-` so that names differing only
 /// in separator choice compare equal.
 fn normalize_separators(name: &str) -> String {
@@ -347,15 +364,39 @@ fn bitsquat_impersonation(
     }
     None
 }
-
 /// Scores `name` against the bundled popular-package dataset using every
 /// typosquat signal and returns why (if at all) it looks suspicious.
 ///
 /// The dataset and its [`BkTree`] index are built on the first call and
 /// reused afterwards, so callers only need a name.
 pub fn score_package(name: &str) -> ScanResult {
-    let dataset = popular_packages();
+    score_package_with_allowlist(name, &[])
+}
+
+/// Like [`score_package`], but also honours a project-level allowlist
+/// (`typosquat.allow` in `depradar.toml`), merged with the built-in
+/// allowlist via [`merged_allowlist`].
+///
+/// A candidate whose normalized name is in the merged allowlist returns a
+/// clean [`ScanResult`] with no signals and zero confidence.
+pub fn score_package_with_allowlist(name: &str, project_allow: &[String]) -> ScanResult {
     let normalized = normalize_name(name);
+    if merged_allowlist(project_allow).contains(&normalized) {
+        return ScanResult {
+            candidate: name.to_string(),
+            distance_match: None,
+            edit_script: Vec::new(),
+            rank: None,
+            homoglyph_match: None,
+            digit_swap_match: None,
+            keyboard_typo: false,
+            scope_confusion: None,
+            combosquat: None,
+            confidence: 0,
+        };
+    }
+
+    let dataset = popular_packages();
 
     // Results are sorted by distance, then dataset order, so the first hit is
     // what a linear `nearest_match` scan would return. An exact match
@@ -672,6 +713,41 @@ mod tests {
     fn display_reports_no_signal_for_clean_name() {
         let result = score_package("react");
         assert_eq!(result.to_string(), "react: no typosquat signal detected");
+    }
+
+    #[test]
+    fn project_allowlist_silences_a_typosquat_finding() {
+        // Without the allowlist, `expresss` is flagged as one edit from
+        // `express`.
+        let flagged = score_package("expresss");
+        assert!(flagged.is_likely_typosquat());
+
+        // With it allowlisted at the project level, no signal fires.
+        let allow = vec!["expresss".to_string()];
+        let allowed = score_package_with_allowlist("expresss", &allow);
+        assert!(!allowed.is_likely_typosquat());
+        assert_eq!(allowed.distance_match, None);
+        assert_eq!(allowed.confidence, 0);
+        assert_eq!(
+            allowed.to_string(),
+            "expresss: no typosquat signal detected"
+        );
+    }
+
+    #[test]
+    fn project_allowlist_is_normalized() {
+        // Case and lookalike characters are folded, so the allowlist entry
+        // matches the candidate regardless of how it is written.
+        let allow = vec!["Expresss".to_string()];
+        let result = score_package_with_allowlist("expresss", &allow);
+        assert!(!result.is_likely_typosquat());
+    }
+
+    #[test]
+    fn merged_allowlist_includes_builtin_and_project_entries() {
+        let merged = merged_allowlist(&["my-project-pkg".to_string()]);
+        assert!(merged.contains(&normalize_name("my-project-pkg")));
+        assert!(!merged.contains(&normalize_name("expresss")));
     }
 
     #[test]
