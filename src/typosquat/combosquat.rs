@@ -14,6 +14,98 @@ pub const BAIT_WORDS: &[&str] = &[
     "py", "python",
 ];
 
+/// Ecosystem a package belongs to, used to pick the affix table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ecosystem {
+    Npm,
+    PyPI,
+    CratesIo,
+    RubyGems,
+}
+
+/// Prefixes stripped from a candidate before looking up the remainder.
+/// Every entry must be lowercase.
+fn ecosystem_prefixes(ecosystem: Ecosystem) -> &'static [&'static str] {
+    match ecosystem {
+        Ecosystem::Npm => &["node-"],
+        Ecosystem::PyPI => &["py-", "python-"],
+        Ecosystem::CratesIo => &["rust-"],
+        Ecosystem::RubyGems => &["ruby-"],
+    }
+}
+
+/// Suffixes stripped from a candidate before looking up the remainder.
+/// Every entry must be lowercase.
+fn ecosystem_suffixes(ecosystem: Ecosystem) -> &'static [&'static str] {
+    match ecosystem {
+        Ecosystem::Npm => &["-js", "-node"],
+        Ecosystem::PyPI => &["-py"],
+        Ecosystem::CratesIo => &["-rs"],
+        Ecosystem::RubyGems => &["-rb"],
+    }
+}
+
+/// Real packages that legitimately carry an ecosystem affix and must never
+/// be flagged by [`affix`]. Every entry must be lowercase.
+pub const AFFIX_ALLOWLIST: &[&str] = &[
+    "node-fetch",
+    "node-forge",
+    "node-gyp",
+    "node-sass",
+    "pyyaml",
+    "pyparsing",
+    "pytest",
+    "rustc",
+    "rustfmt",
+    "rubyzip",
+    "rubygems",
+    "js-yaml",
+    "date-fns",
+    "preact-rs",
+];
+
+/// Reports whether `candidate` is a popular package name with an ecosystem
+/// affix (`node-`, `-js`, `py-`, `-rs`, ...) attached.
+///
+/// The candidate is checked against [`AFFIX_ALLOWLIST`] first, then each
+/// known prefix and suffix for `ecosystem` is stripped in turn and the
+/// remainder looked up in `dataset`. Returns `Some(popular)` with the
+/// matched popular name when the remainder is a known package.
+///
+/// A candidate that is itself in `dataset` is never flagged. `candidate` is
+/// expected to be lowercased already.
+pub fn affix(candidate: &str, dataset: &[String], ecosystem: Ecosystem) -> Option<String> {
+    if AFFIX_ALLOWLIST.contains(&candidate) {
+        return None;
+    }
+    if dataset.iter().any(|name| name == candidate) {
+        return None;
+    }
+
+    let lookup = |rest: &str| -> Option<String> {
+        if rest.is_empty() {
+            return None;
+        }
+        dataset.iter().find(|name| name.as_str() == rest).cloned()
+    };
+
+    for prefix in ecosystem_prefixes(ecosystem) {
+        if let Some(rest) = candidate.strip_prefix(prefix) {
+            if let Some(popular) = lookup(rest) {
+                return Some(popular);
+            }
+        }
+    }
+    for suffix in ecosystem_suffixes(ecosystem) {
+        if let Some(rest) = candidate.strip_suffix(suffix) {
+            if let Some(popular) = lookup(rest) {
+                return Some(popular);
+            }
+        }
+    }
+    None
+}
+
 /// Byte ranges of the tokens of `name` separated by `-`, `_` or `.`.
 fn token_ranges(name: &str) -> Vec<(usize, usize)> {
     let mut ranges = Vec::new();
@@ -123,5 +215,88 @@ mod tests {
     fn bait_words_alone_are_not_flagged() {
         let dataset = load_popular_packages();
         assert_eq!(combosquat("secure-utils", &dataset), None);
+    }
+
+    #[test]
+    fn npm_affixes_are_flagged() {
+        let dataset = load_popular_packages();
+        assert_eq!(
+            affix("node-lodash", &dataset, Ecosystem::Npm).as_deref(),
+            Some("lodash")
+        );
+        assert_eq!(
+            affix("express-js", &dataset, Ecosystem::Npm).as_deref(),
+            Some("express")
+        );
+        assert_eq!(
+            affix("react-node", &dataset, Ecosystem::Npm).as_deref(),
+            Some("react")
+        );
+    }
+
+    #[test]
+    fn pypi_affixes_are_flagged() {
+        let dataset = load_popular_packages();
+        assert_eq!(
+            affix("py-requests", &dataset, Ecosystem::PyPI).as_deref(),
+            Some("requests")
+        );
+        assert_eq!(
+            affix("python-flask", &dataset, Ecosystem::PyPI).as_deref(),
+            Some("flask")
+        );
+        assert_eq!(
+            affix("django-py", &dataset, Ecosystem::PyPI).as_deref(),
+            Some("django")
+        );
+    }
+
+    #[test]
+    fn crates_io_affixes_are_flagged() {
+        let dataset = load_popular_packages();
+        assert_eq!(
+            affix("serde-rs", &dataset, Ecosystem::CratesIo).as_deref(),
+            Some("serde")
+        );
+        assert_eq!(
+            affix("rust-tokio", &dataset, Ecosystem::CratesIo).as_deref(),
+            Some("tokio")
+        );
+        assert_eq!(
+            affix("rand-rs", &dataset, Ecosystem::CratesIo).as_deref(),
+            Some("rand")
+        );
+    }
+
+    #[test]
+    fn rubygems_affixes_are_flagged() {
+        let dataset = load_popular_packages();
+        assert_eq!(
+            affix("rails-rb", &dataset, Ecosystem::RubyGems).as_deref(),
+            Some("rails")
+        );
+        assert_eq!(
+            affix("ruby-rack", &dataset, Ecosystem::RubyGems).as_deref(),
+            Some("rack")
+        );
+        assert_eq!(
+            affix("rake-rb", &dataset, Ecosystem::RubyGems).as_deref(),
+            Some("rake")
+        );
+    }
+
+    #[test]
+    fn allowlisted_affix_packages_are_not_flagged() {
+        let dataset = load_popular_packages();
+        for name in ["node-fetch", "pyyaml", "rustc", "rubyzip", "js-yaml"] {
+            assert_eq!(affix(name, &dataset, Ecosystem::Npm), None, "{name}");
+        }
+    }
+
+    #[test]
+    fn affix_without_popular_remainder_is_not_flagged() {
+        let dataset = load_popular_packages();
+        assert_eq!(affix("node-banana", &dataset, Ecosystem::Npm), None);
+        assert_eq!(affix("banana-py", &dataset, Ecosystem::PyPI), None);
     }
 }

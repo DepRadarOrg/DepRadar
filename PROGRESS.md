@@ -1839,6 +1839,65 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** #154
 - **Status:** In review.
 
+### Typosquat — grow the npm dataset to the top 5,000 packages — #338
+
+- **What:** `data/popular-packages/npm-top1000.json` is regenerated as the
+  top 5,000 npm packages by downloads (the file keeps its historical name so
+  the loader and validation tests are unchanged), and
+  `scripts/update-datasets.py` now fetches 5,000 npm names instead of 1,000.
+  Mid-popularity squats that previously fell outside the reference list are
+  now scored.
+- **Benchmarks:** `benches/typosquat.rs` `score_package` numbers before/after
+  are recorded in the PR description; no benchmark regressed by more than
+  20% (the BK-tree lookup keeps scoring sub-linear in dataset size).
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass, including the dataset validation test over
+  the enlarged file.
+- **Closes:** #338
+- **Status:** In review.
+
+### Typosquat — detect ecosystem affixes (`py-`, `-js`, `node-`, `-rs`) — #340
+
+- **What:** [`src/typosquat/combosquat.rs`](src/typosquat/combosquat.rs)
+  strips common per-ecosystem affixes (`py-`/`-py` for PyPI, `node-`/`-js`
+  for npm, `-rs`/`rs-` for crates.io) and compares the stripped name to the
+  dataset, so names like `requests-py`, `pyrequests` or `node-lodash` are
+  caught. A dedicated `affix_match` signal is reported on `ScanResult` and
+  contributes to the confidence score.
+- **Tests:** at least three affixes per ecosystem are covered, plus
+  allowlisted real packages (e.g. `node-fetch`, `pyyaml`) that must not be
+  flagged.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #340
+- **Status:** In review.
+
+### Typosquat — fail CI when a popular-package dataset is stale — #344
+
+- **What:** Each file in `data/popular-packages/` now carries a
+  `generated_at` date, and [`src/typosquat/dataset.rs`](src/typosquat/dataset.rs)
+  gains a test that fails when a dataset's `generated_at` is older than 180
+  days. `scripts/update-datasets.py` writes the date on every regeneration.
+- **Tests:** the staleness test fails on an old date and passes on today's.
+- **Verified:** the workflow runs green on the PR; `cargo fmt`,
+  `cargo clippy -- -D warnings` and `cargo test --workspace` pass.
+- **Closes:** #344
+- **Status:** In review.
+
+### CVE — treat OSV `MAL-` advisories as critical malicious-package findings — #345
+
+- **What:** [`src/cve/`](src/cve/) detects OSV advisory IDs beginning with
+  `MAL-` and maps them to `Severity::Critical` with a "malicious package"
+  label, so known malware is reported distinctly from ordinary
+  vulnerabilities. [`src/report/`](src/report/) renders the label in the text
+  and JSON output.
+- **Tests:** a mock-server test feeds a `MAL-` hit and asserts it renders as
+  critical with the malware label.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #345
+- **Status:** In review.
+
 ### CVE — Flag vulnerabilities in CISA's Known Exploited Vulnerabilities list — #346
 
 - **What:** Adds `src/cve/kev.rs`, which downloads CISA's KEV JSON feed
@@ -1906,6 +1965,7 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
   `cargo test --workspace` pass.
 - **Closes:** #350
+- **Status:** In review.
 - **Status:** In review.
 
 - #310 — Scan checked-out repositories without executing their contents and encrypt nightly ecosystem reports for the disclosure team (@willy-de7)

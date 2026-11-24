@@ -40,12 +40,17 @@ impl Severity {
     }
 }
 
+/// Label attached to OSV `MAL-` advisories, which report known malware
+/// rather than a conventional vulnerability.
+pub const MALICIOUS_PACKAGE_LABEL: &str = "malicious package";
+
 /// A vulnerability's severity level, with the numeric score when it came
-/// from a CVSS vector.
+/// from a CVSS vector, and an optional label (e.g. for malware advisories).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SeverityScore {
     pub base_score: Option<f64>,
     pub level: Severity,
+    pub label: Option<&'static str>,
 }
 
 /// Computes the CVSS v3.0/v3.1 base score from a vector string such as
@@ -143,7 +148,19 @@ fn roundup(x: f64) -> f64 {
 
 /// Scores a vulnerability from its CVSS v3 vector, or else from the
 /// `database_specific.severity` label. `None` if neither is available.
+///
+/// OSV `MAL-` advisories report known malware; they are always treated as
+/// [`Severity::Critical`] with the [`MALICIOUS_PACKAGE_LABEL`], regardless
+/// of any CVSS data.
 pub fn assess(vuln: &OsvVulnerability) -> Option<SeverityScore> {
+    if vuln.id.starts_with("MAL-") {
+        return Some(SeverityScore {
+            base_score: None,
+            level: Severity::Critical,
+            label: Some(MALICIOUS_PACKAGE_LABEL),
+        });
+    }
+
     let from_vector = vuln
         .severity
         .iter()
@@ -153,6 +170,7 @@ pub fn assess(vuln: &OsvVulnerability) -> Option<SeverityScore> {
         return Some(SeverityScore {
             base_score: Some(score),
             level: Severity::from_score(score),
+            label: None,
         });
     }
 
@@ -160,6 +178,7 @@ pub fn assess(vuln: &OsvVulnerability) -> Option<SeverityScore> {
     Some(SeverityScore {
         base_score: None,
         level: Severity::from_label(label)?,
+        label: None,
     })
 }
 
@@ -217,7 +236,8 @@ mod tests {
             assess(&v),
             Some(SeverityScore {
                 base_score: Some(9.8),
-                level: Severity::Critical
+                level: Severity::Critical,
+                label: None,
             })
         );
 
@@ -226,10 +246,33 @@ mod tests {
             assess(&v),
             Some(SeverityScore {
                 base_score: None,
-                level: Severity::Medium
+                level: Severity::Medium,
+                label: None,
             })
         );
 
         assert_eq!(assess(&vuln(r#"{"id":"Z"}"#)), None);
+    }
+
+    #[test]
+    fn mal_advisories_are_critical_malicious_packages() {
+        let v = vuln(r#"{"id":"MAL-2024-1234"}"#);
+        assert_eq!(
+            assess(&v),
+            Some(SeverityScore {
+                base_score: None,
+                level: Severity::Critical,
+                label: Some(MALICIOUS_PACKAGE_LABEL),
+            })
+        );
+
+        // Malware wins even when a low-severity CVSS vector is present.
+        let v = vuln(
+            r#"{"id":"MAL-2024-5678","severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:L/AC:H/PR:H/UI:R/S:U/C:N/I:N/A:N"}],
+                "database_specific":{"severity":"LOW"}}"#,
+        );
+        let score = assess(&v).unwrap();
+        assert_eq!(score.level, Severity::Critical);
+        assert_eq!(score.label, Some(MALICIOUS_PACKAGE_LABEL));
     }
 }

@@ -1,4 +1,6 @@
-[
+{
+  "generated_at": "2025-01-01",
+  "packages": [
   "boto3",
   "packaging",
   "typing-extensions",
@@ -999,4 +1001,5 @@
   "html2text",
   "geopandas",
   "opentelemetry-instrumentation-grpc"
-]
+  ]
+}

@@ -189,6 +189,27 @@ pub struct OsvVulnerability {
     pub database_specific: Option<serde_json::Value>,
 }
 
+/// Prefix OSV uses for advisories describing known malware (malicious
+/// packages) rather than a vulnerability, e.g. `MAL-2024-1234`.
+pub const MALICIOUS_ADVISORY_PREFIX: &str = "MAL-";
+
+/// Whether `id` is an OSV malware advisory (`MAL-` prefix).
+///
+/// OSV publishes known malicious packages as `MAL-` advisories; these are
+/// not vulnerabilities and should be reported as critical malicious-package
+/// findings rather than scored like a CVE.
+pub fn is_malicious_advisory(id: &str) -> bool {
+    id.starts_with(MALICIOUS_ADVISORY_PREFIX)
+}
+
+impl OsvVulnerability {
+    /// Whether this record is an OSV malware advisory (see
+    /// [`is_malicious_advisory`]).
+    pub fn is_malicious(&self) -> bool {
+        is_malicious_advisory(&self.id)
+    }
+}
+
 /// Response body of `POST /v1/query`: the list of vulnerabilities matching
 /// the queried package/version, if any.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -749,6 +770,26 @@ mod tests {
             "expected CVE-2020-28500 among lodash@4.17.4's vulnerabilities, got: {:?}",
             response.vulns.iter().map(|v| &v.id).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn detects_malicious_advisory_ids() {
+        assert!(is_malicious_advisory("MAL-2024-1234"));
+        assert!(is_malicious_advisory("MAL-0"));
+        assert!(!is_malicious_advisory("GHSA-29mw-wpgm-hmr9"));
+        assert!(!is_malicious_advisory("CVE-2020-28500"));
+        assert!(!is_malicious_advisory("RUSTSEC-2024-0001"));
+        assert!(!is_malicious_advisory(""));
+        assert!(!is_malicious_advisory("mal-2024-1234"));
+    }
+
+    #[test]
+    fn vulnerability_reports_malicious_flag() {
+        let mal: OsvVulnerability = serde_json::from_str(r#"{"id":"MAL-2024-1234"}"#).unwrap();
+        assert!(mal.is_malicious());
+        let ghsa: OsvVulnerability =
+            serde_json::from_str(r#"{"id":"GHSA-29mw-wpgm-hmr9"}"#).unwrap();
+        assert!(!ghsa.is_malicious());
     }
 
     #[test]

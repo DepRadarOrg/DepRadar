@@ -6,7 +6,7 @@
 
 use std::fmt::Write;
 
-use super::{label, severity_of, AdvisorySeverities, Severity};
+use super::{is_malicious, label, severity_of, AdvisorySeverities, Severity};
 use crate::pipeline::Report;
 
 /// Renders a severity badge in Markdown.
@@ -74,6 +74,9 @@ fn write_report(
                 format_ecosystem(&finding.ecosystem)
             )?;
             writeln!(out, "**Severity:** {}", label(severity))?;
+            if is_malicious(finding) {
+                writeln!(out, "**Label:** malicious package")?;
+            }
             writeln!(
                 out,
                 "**Scope:** {}",
@@ -171,7 +174,14 @@ fn write_finding_details(out: &mut String, finding: &crate::model::Finding) -> s
             epss_score,
         } => {
             writeln!(out, "#### Details\n")?;
-            writeln!(out, "Known vulnerability detected.\n")?;
+            if is_malicious(finding) {
+                writeln!(
+                    out,
+                    "⚠️ **Malicious package detected.** This package is known to be malware.\n"
+                )?;
+            } else {
+                writeln!(out, "Known vulnerability detected.\n")?;
+            }
             writeln!(out, "- **Advisory ID**: `{}`", advisory_id)?;
             writeln!(
                 out,
@@ -187,10 +197,17 @@ fn write_finding_details(out: &mut String, finding: &crate::model::Finding) -> s
             if let Some(score) = epss_score {
                 writeln!(out, "- **EPSS score**: {:.2}%", score * 100.0)?;
             }
-            writeln!(
-                out,
-                "\n**Recommendation**: Update to a patched version or find an alternative package."
-            )?;
+            if is_malicious(finding) {
+                writeln!(
+                    out,
+                    "\n**Recommendation**: Remove this dependency immediately and audit for compromise."
+                )?;
+            } else {
+                writeln!(
+                    out,
+                    "\n**Recommendation**: Update to a patched version or find an alternative package."
+                )?;
+            }
         }
         FindingKind::Deprecated { .. } | FindingKind::License { .. } => {
             writeln!(out, "#### Details\n")?;
@@ -274,6 +291,46 @@ mod tests {
             dependencies: vec![],
             timings: vec![],
         }
+    }
+
+    #[test]
+    fn malicious_advisory_renders_critical_with_label() {
+        use crate::pipeline::Summary;
+        use std::path::PathBuf;
+
+        let report = crate::pipeline::Report {
+            path: PathBuf::from("package-lock.json"),
+            ecosystem: Ecosystem::Npm,
+            findings: vec![Finding {
+                package: "evil-pkg".to_string(),
+                version: Some("1.0.0".to_string()),
+                ecosystem: Ecosystem::Npm,
+                direct: true,
+                path: vec![],
+                kind: FindingKind::Vulnerability {
+                    advisory_id: "MAL-2024-1234".to_string(),
+                    known_exploited: false,
+                    epss_score: None,
+                },
+            }],
+            suppressed: vec![],
+            warnings: vec![],
+            summary: Summary {
+                packages: 1,
+                queried: 1,
+                typosquats: 0,
+                vulnerabilities: 1,
+                suppressed: 0,
+                warnings: 0,
+            },
+            dependencies: vec![],
+            timings: vec![],
+        };
+
+        let output = render(&report, &AdvisorySeverities::default());
+        assert!(output.contains("malicious package"));
+        assert!(output.contains("CRITICAL"));
+        assert!(output.contains("Malicious package detected"));
     }
 
     #[test]

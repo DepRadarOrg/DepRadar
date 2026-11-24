@@ -1,4 +1,6 @@
-[
+{
+  "generated_at": "2025-01-01",
+  "packages": [
   "semver",
   "minimatch",
   "debug",
@@ -999,4 +1001,5 @@
   "@opentelemetry/sdk-metrics",
   "@babel/plugin-transform-for-of",
   "@emnapi/core"
-]
+  ]
+}

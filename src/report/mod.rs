@@ -29,6 +29,17 @@ pub mod text;
 /// slipping past a CI gate.
 pub const UNRATED_ADVISORY: Severity = Severity::High;
 
+/// Prefix OSV uses for advisories about known malware.
+pub const MALICIOUS_ADVISORY_PREFIX: &str = "MAL-";
+
+/// Label shown for a malicious-package finding.
+pub const MALICIOUS_LABEL: &str = "malicious package";
+
+/// Whether `advisory_id` is an OSV malware advisory (`MAL-`).
+pub fn is_malicious_advisory(advisory_id: &str) -> bool {
+    advisory_id.starts_with(MALICIOUS_ADVISORY_PREFIX)
+}
+
 /// Lower-case name of a severity level, as shown in output.
 pub fn label(severity: Severity) -> &'static str {
     match severity {
@@ -134,9 +145,10 @@ pub fn enrich_findings(
 /// A homoglyph typosquat is critical: lookalike characters only end up in a
 /// package name on purpose. A name that is merely a few edits from a popular
 /// package is high, since it may be an honest near-collision. A vulnerability
-/// takes its advisory's level, or [`UNRATED_ADVISORY`] if that's unknown. A
-/// package installed from outside the registry is low: it is usually
-/// deliberate, but no registry check covered it.
+/// takes its advisory's level, or [`UNRATED_ADVISORY`] if that's unknown. An
+/// OSV `MAL-` advisory means the package is known malware, so it's always
+/// critical. A package installed from outside the registry is low: it is
+/// usually deliberate, but no registry check covered it.
 pub fn severity_of(finding: &Finding, advisories: &AdvisorySeverities) -> Severity {
     match &finding.kind {
         FindingKind::Typosquat {
@@ -146,9 +158,26 @@ pub fn severity_of(finding: &Finding, advisories: &AdvisorySeverities) -> Severi
         FindingKind::Typosquat { .. } => Severity::High,
         FindingKind::Deprecated { .. } | FindingKind::License { .. } => Severity::Low,
         FindingKind::Vulnerability { advisory_id } => {
-            advisories.get(advisory_id).unwrap_or(UNRATED_ADVISORY)
+            if is_malicious_advisory(advisory_id) {
+                Severity::Critical
+            } else {
+                advisories.get(advisory_id).unwrap_or(UNRATED_ADVISORY)
+            }
         }
         FindingKind::NonRegistrySource { .. } => Severity::Low,
+    }
+}
+
+/// Extra label for `finding`, if it needs one beyond its severity.
+///
+/// A vulnerability from an OSV `MAL-` advisory is labelled
+/// [`MALICIOUS_LABEL`]; everything else has no extra label.
+pub fn finding_label(finding: &Finding) -> Option<&'static str> {
+    match &finding.kind {
+        FindingKind::Vulnerability { advisory_id } if is_malicious_advisory(advisory_id) => {
+            Some(MALICIOUS_LABEL)
+        }
+        _ => None,
     }
 }
 
@@ -199,6 +228,46 @@ mod tests {
         });
         assert_eq!(severity_of(&rated, &advisories), Severity::Low);
         assert_eq!(severity_of(&unrated, &advisories), UNRATED_ADVISORY);
+    }
+
+    #[test]
+    fn rates_malicious_advisories_critical() {
+        let mut advisories = AdvisorySeverities::default();
+        // Even if the advisory was rated low, malware wins.
+        advisories.insert("MAL-2024-1", Severity::Low);
+        let malicious = finding(FindingKind::Vulnerability {
+            advisory_id: "MAL-2024-1".to_string(),
+            aliases: Vec::new(),
+        });
+        let unrated_malicious = finding(FindingKind::Vulnerability {
+            advisory_id: "MAL-2024-2".to_string(),
+            aliases: Vec::new(),
+        });
+        assert_eq!(severity_of(&malicious, &advisories), Severity::Critical);
+        assert_eq!(
+            severity_of(&unrated_malicious, &advisories),
+            Severity::Critical
+        );
+        assert_eq!(finding_label(&malicious), Some(MALICIOUS_LABEL));
+        assert_eq!(finding_label(&unrated_malicious), Some(MALICIOUS_LABEL));
+    }
+
+    #[test]
+    fn non_malicious_findings_have_no_extra_label() {
+        let advisories = AdvisorySeverities::default();
+        let vuln = finding(FindingKind::Vulnerability {
+            advisory_id: "GHSA-unknown".to_string(),
+            aliases: Vec::new(),
+        });
+        let typosquat = finding(FindingKind::Typosquat {
+            distance_match: Some(("react".to_string(), 1)),
+            homoglyph_match: Some("react".to_string()),
+        });
+        assert_eq!(finding_label(&vuln), None);
+        assert_eq!(finding_label(&typosquat), None);
+        assert!(!is_malicious_advisory("GHSA-unknown"));
+        assert!(is_malicious_advisory("MAL-2024-1"));
+        assert_eq!(severity_of(&vuln, &advisories), UNRATED_ADVISORY);
     }
 
     #[test]

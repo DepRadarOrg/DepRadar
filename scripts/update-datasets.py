@@ -25,7 +25,10 @@ import urllib.request
 from pathlib import Path
 
 TOP_N = 1000
+# npm gets a larger reference set so squats of mid-popularity packages are caught.
+NPM_TOP_N = 5000
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "popular-packages"
+METADATA_PATH = DATA_DIR / "generated-at.json"
 USER_AGENT = "DepRadar dataset updater (https://github.com/DepRadarOrg/DepRadar)"
 
 NPM_SOURCE = "https://raw.githubusercontent.com/wooorm/npm-high-impact/main/lib/top-download.js"
@@ -168,9 +171,12 @@ REGISTRIES = {
     ),
 }
 
+# Per-registry reference-set size; registries not listed use TOP_N.
+REGISTRY_TOP_N = {"npm": NPM_TOP_N}
 
-def top_names(ranked, is_valid, identity):
-    """The TOP_N highest-ranked valid, distinct names, most-downloaded first."""
+
+def top_names(ranked, is_valid, identity, limit):
+    """The `limit` highest-ranked valid, distinct names, most-downloaded first."""
     chosen = {}
     skipped = []
     for raw in ranked:
@@ -179,20 +185,37 @@ def top_names(ranked, is_valid, identity):
             skipped.append(raw)
             continue
         chosen.setdefault(identity(name), name)
-        if len(chosen) == TOP_N:
+        if len(chosen) == limit:
             break
-    if len(chosen) < TOP_N:
-        sys.exit(f"source only yielded {len(chosen)} valid names, expected {TOP_N}")
+    if len(chosen) < limit:
+        sys.exit(f"source only yielded {len(chosen)} valid names, expected {limit}")
     if skipped:
         print(f"  skipped {len(skipped)} invalid name(s): {', '.join(skipped[:5])}")
     return list(chosen.values())
 
 
-def update(registry):
+def read_metadata():
+    """The registry -> generated_at mapping, or {} when absent."""
+    if not METADATA_PATH.exists():
+        return {}
+    return json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+
+
+def write_metadata(metadata):
+    """Rewrite generated-at.json, sorted by registry, only when it changes."""
+    content = json.dumps(dict(sorted(metadata.items())), indent=2) + "\n"
+    old = METADATA_PATH.read_text(encoding="utf-8") if METADATA_PATH.exists() else ""
+    if content == old:
+        return
+    METADATA_PATH.write_text(content, encoding="utf-8")
+
+
+def update(registry, metadata):
     ranked, is_valid, identity = REGISTRIES[registry]
-    path = DATA_DIR / f"{registry}-top1000.json"
-    print(f"{registry}: fetching")
-    names = top_names(ranked(), is_valid, identity)
+    limit = REGISTRY_TOP_N.get(registry, TOP_N)
+    path = DATA_DIR / f"{registry}-top{limit}.json"
+    print(f"{registry}: fetching top {limit}")
+    names = top_names(ranked(), is_valid, identity, limit)
     content = json.dumps(names, indent=2) + "\n"
 
     old = path.read_text(encoding="utf-8") if path.exists() else "[]"
@@ -201,6 +224,7 @@ def update(registry):
         print(f"{registry}: unchanged ({path.name})")
         return
     path.write_text(content, encoding="utf-8")
+    metadata[registry] = time.strftime("%Y-%m-%d", time.gmtime())
     added = len(set(names) - old_names)
     removed = len(old_names - set(names))
     print(f"{registry}: wrote {path.name} (+{added} -{removed})")
@@ -218,8 +242,10 @@ def main():
     unknown = [r for r in registries if r not in REGISTRIES]
     if unknown:
         parser.error(f"unknown registry {unknown[0]!r} (choose from {', '.join(REGISTRIES)})")
+    metadata = read_metadata()
     for registry in registries:
-        update(registry)
+        update(registry, metadata)
+    write_metadata(metadata)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 
 use super::bktree::BkTree;
-use super::combosquat::combosquat;
+use super::combosquat::{affix_impersonation, combosquat};
 use super::dataset::{popular_packages, popularity_rank, rank};
 use super::distance::{edit_script, EditOp};
 use super::homoglyph::{digit_swap_impersonation, homoglyph_impersonation};
@@ -99,6 +99,10 @@ pub struct ScanResult {
     /// Set when [`combosquat`] found that the candidate is a popular package
     /// name with bait words attached (`lodash-utils`): the popular package.
     pub combosquat: Option<String>,
+    /// Set when [`affix_impersonation`] found that the candidate is a popular
+    /// package name with an ecosystem affix attached (`requests-py`,
+    /// `node-lodash`, `serde-rs`): the popular package.
+    pub affix: Option<String>,
     /// Set when the candidate matches a popular package once separators
     /// (`-`, `_`, `.`) are normalised (`lodash-merge` vs `lodash.merge`):
     /// the popular package. Never fires for PyPI, where PEP 503 already
@@ -120,6 +124,7 @@ impl ScanResult {
             || self.digit_swap_match.is_some()
             || self.scope_confusion.is_some()
             || self.combosquat.is_some()
+            || self.affix.is_some()
             || self.separator_swap_match.is_some()
             || self.bitsquat_match.is_some()
     }
@@ -179,6 +184,12 @@ impl fmt::Display for ScanResult {
             write!(
                 f,
                 "\n  - combosquat of popular package \"{name}\" with bait words"
+            )?;
+        }
+        if let Some(name) = &self.affix {
+            write!(
+                f,
+                "\n  - ecosystem affix impersonating popular package \"{name}\""
             )?;
         }
         if let Some(name) = &self.separator_swap_match {
@@ -370,6 +381,7 @@ pub fn score_package(name: &str) -> ScanResult {
         .is_some_and(|(matched, _)| keyboard_typo(&normalized, matched));
     let scope_confusion = scope_confusion(&normalized, dataset);
     let combosquat = combosquat(&normalized, dataset);
+    let affix = affix_impersonation(&normalized, dataset);
     let separator_swap_match = separator_swap_impersonation(&normalized, dataset);
     let bitsquat_match = bitsquat_impersonation(&normalized, dataset);
     let confidence = confidence(
@@ -392,6 +404,7 @@ pub fn score_package(name: &str) -> ScanResult {
         keyboard_typo,
         scope_confusion,
         combosquat,
+        affix,
         separator_swap_match,
         bitsquat_match,
         confidence,
@@ -483,7 +496,7 @@ mod tests {
         let json = serde_json::to_string(&result).expect("ScanResult serializes");
         assert_eq!(
             json,
-            r#"{"candidate":"expresss","distance_match":["express",1],"edit_script":[{"op":"insert","position":7,"char":"s"}],"rank":111,"homoglyph_match":null,"digit_swap_match":null,"keyboard_typo":false,"scope_confusion":null,"combosquat":null,"separator_swap_match":null,"bitsquat_match":null,"confidence":40}"#
+            r#"{"candidate":"expresss","distance_match":["express",1],"edit_script":[{"op":"insert","position":7,"char":"s"}],"rank":111,"homoglyph_match":null,"digit_swap_match":null,"keyboard_typo":false,"scope_confusion":null,"combosquat":null,"affix":null,"separator_swap_match":null,"bitsquat_match":null,"confidence":40}"#
         );
     }
 
@@ -622,6 +635,37 @@ mod tests {
     fn real_multi_word_package_is_not_a_combosquat() {
         let result = score_package("react-dom");
         assert_eq!(result.combosquat, None);
+    }
+
+    #[test]
+    fn pypi_affix_is_flagged_with_reason() {
+        let result = score_package("requests-py");
+        assert_eq!(result.affix.as_deref(), Some("requests"));
+        assert!(result.is_likely_typosquat());
+        assert!(result
+            .to_string()
+            .contains("ecosystem affix impersonating popular package \"requests\""));
+    }
+
+    #[test]
+    fn npm_affix_is_flagged_with_reason() {
+        let result = score_package("node-lodash");
+        assert_eq!(result.affix.as_deref(), Some("lodash"));
+        assert!(result.is_likely_typosquat());
+    }
+
+    #[test]
+    fn cargo_affix_is_flagged_with_reason() {
+        let result = score_package("serde-rs");
+        assert_eq!(result.affix.as_deref(), Some("serde"));
+        assert!(result.is_likely_typosquat());
+    }
+
+    #[test]
+    fn clean_name_has_no_affix_signal() {
+        let result = score_package("react");
+        assert_eq!(result.affix, None);
+        assert!(!result.is_likely_typosquat());
     }
 
     #[test]
