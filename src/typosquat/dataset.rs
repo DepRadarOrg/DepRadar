@@ -1,5 +1,5 @@
-//! Bundled lists of popular npm, PyPI, crates.io, RubyGems, Go module and
-//! Packagist package names.
+//! Bundled lists of popular npm, PyPI, crates.io, RubyGems, Maven Central, Go
+//! module and Packagist package names.
 //!
 //! Typosquatting attacks work by publishing a package whose name is one edit
 //! away from something popular (`reqeusts`, `expresss`, `lodahs`). Detecting
@@ -35,6 +35,11 @@ const CRATES_TOP_PACKAGES_JSON: &str =
 /// time.
 const RUBYGEMS_TOP_PACKAGES_JSON: &str =
     include_str!("../../data/popular-packages/rubygems-top1000.json");
+
+/// Raw JSON text of the Maven Central popular-package list, embedded at
+/// compile time. Entries are `groupId:artifactId` coordinates.
+const MAVEN_TOP_PACKAGES_JSON: &str =
+    include_str!("../../data/popular-packages/maven-top1000.json");
 
 /// Raw JSON text of the Go module popular-package list, embedded at compile
 /// time.
@@ -295,6 +300,12 @@ mod tests {
             identity: str::to_string,
         },
         Dataset {
+            file: "maven-top1000.json",
+            raw: MAVEN_TOP_PACKAGES_JSON,
+            is_valid_name: is_valid_maven_name,
+            identity: str::to_string,
+        },
+        Dataset {
             file: "go-top1000.json",
             raw: GO_TOP_PACKAGES_JSON,
             is_valid_name: is_valid_go_module_name,
@@ -359,6 +370,17 @@ mod tests {
                 .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._".contains(c))
     }
 
+    /// Maven Central: a `groupId:artifactId` coordinate. Both parts are
+    /// lowercase and made of `a-z 0-9 - . _`; the groupId has at least one
+    /// dot-separated segment and neither part is empty.
+    fn is_valid_maven_name(name: &str) -> bool {
+        fn is_valid_part(part: &str) -> bool {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._".contains(c))
+        }
+
     /// Go modules: a slash-separated import path whose segments are made of
     /// `a-z 0-9 - . _ ~`, none empty, and the whole path lowercase.
     fn is_valid_go_module_name(name: &str) -> bool {
@@ -379,6 +401,14 @@ mod tests {
                 && part
                     .chars()
                     .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-._".contains(c))
+        }
+
+        if let Some((group, artifact)) = name.split_once(':') {
+            return is_valid_part(group)
+                && group.contains('.')
+                && !group.starts_with('.')
+                && !group.ends_with('.')
+                && is_valid_part(artifact);
         }
 
         match name.split_once('/') {
@@ -676,6 +706,14 @@ mod tests {
             );
         }
 
+        // A well-known Maven Central coordinate.
+        assert!(
+            packages
+                .iter()
+                .any(|p| p == "org.springframework:spring-core"),
+            "expected Maven coordinate 'org.springframework:spring-core' in the combined list"
+        );
+
         // Two of the most-imported Go modules.
         for name in ["github.com/gin-gonic/gin", "github.com/spf13/cobra"] {
             assert!(
@@ -731,6 +769,56 @@ mod tests {
             is_typosquat_of(typosquat, &go),
             "expected {typosquat:?} to be flagged as a Go module typosquat"
         );
+    }
+
+    #[test]
+    fn maven_typosquat_is_flagged() {
+        // `org.springframework:spring-cor` is one edit away from the popular
+        // `org.springframework:spring-core` coordinate.
+        let typo = "org.springframework:spring-cor";
+        let target = "org.springframework:spring-core";
+
+        assert!(
+            load_popular_packages().iter().any(|p| p == target),
+            "expected {target:?} in the Maven dataset"
+        );
+        assert!(
+            !load_popular_packages().iter().any(|p| p == typo),
+            "typosquat {typo:?} should not itself be a listed package"
+        );
+        assert!(
+            is_one_edit_away(typo, target),
+            "expected {typo:?} to be one edit away from {target:?}"
+        );
+    }
+
+    /// Returns true if `a` and `b` differ by exactly one insertion, deletion
+    /// or substitution.
+    fn is_one_edit_away(a: &str, b: &str) -> bool {
+        let a: Vec<char> = a.chars().collect();
+        let b: Vec<char> = b.chars().collect();
+        if a.len().abs_diff(b.len()) > 1 {
+            return false;
+        }
+        if a.len() == b.len() {
+            return a.iter().zip(&b).filter(|(x, y)| x != y).count() == 1;
+        }
+        let (shorter, longer) = if a.len() < b.len() { (&a, &b) } else { (&b, &a) };
+        let mut i = 0;
+        let mut j = 0;
+        let mut skipped = false;
+        while i < shorter.len() && j < longer.len() {
+            if shorter[i] == longer[j] {
+                i += 1;
+                j += 1;
+            } else if skipped {
+                return false;
+            } else {
+                skipped = true;
+                j += 1;
+            }
+        }
+        true
     }
 
     #[test]

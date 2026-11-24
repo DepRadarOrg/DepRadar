@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use super::cache::OsvCache;
+use super::offline_db::OfflineDb;
 
 const OSV_BASE_URL: &str = "https://api.osv.dev";
 #[cfg(feature = "async")]
@@ -249,6 +250,8 @@ pub enum OsvClientError {
     Decode(reqwest::Error),
     /// A batch response didn't have exactly one result per query.
     BatchSizeMismatch { expected: usize, got: usize },
+    /// The local offline database couldn't be read or queried.
+    OfflineDb(super::offline_db::OfflineDbError),
 }
 
 impl std::fmt::Display for OsvClientError {
@@ -270,6 +273,7 @@ impl std::fmt::Display for OsvClientError {
                 f,
                 "OSV batch response had {got} results for {expected} queries"
             ),
+            OsvClientError::OfflineDb(err) => write!(f, "offline OSV database error: {err}"),
         }
     }
 }
@@ -278,6 +282,7 @@ impl std::error::Error for OsvClientError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             OsvClientError::Request(err) | OsvClientError::Decode(err) => Some(err),
+            OsvClientError::OfflineDb(err) => Some(err),
             OsvClientError::RateLimited { .. }
             | OsvClientError::NotFound
             | OsvClientError::UnexpectedStatus(_)
@@ -288,11 +293,15 @@ impl std::error::Error for OsvClientError {
 
 /// Client for `POST /v1/query` with a request timeout, retries on 429/5xx
 /// (exponential backoff with jitter) and an optional on-disk response cache.
+///
+/// When an [`OfflineDb`] is attached via [`OsvClient::with_offline_db`],
+/// queries are answered from the local index instead of the network.
 pub struct OsvClient {
     http: reqwest::blocking::Client,
     base_url: String,
     backoff_base: Duration,
     cache: Option<OsvCache>,
+    offline_db: Option<OfflineDb>,
 }
 
 impl Default for OsvClient {
@@ -318,6 +327,7 @@ impl OsvClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             backoff_base: BACKOFF_BASE,
             cache: None,
+            offline_db: None,
         }
     }
 
@@ -325,6 +335,21 @@ impl OsvClient {
     pub fn with_cache(mut self, cache: OsvCache) -> Self {
         self.cache = Some(cache);
         self
+    }
+
+    /// Answers queries from the local OSV index instead of the network.
+    ///
+    /// Once attached, [`OsvClient::query`] never makes an HTTP request; a
+    /// missing or unreadable index surfaces as
+    /// [`OsvClientError::OfflineDb`].
+    pub fn with_offline_db(mut self, db: OfflineDb) -> Self {
+        self.offline_db = Some(db);
+        self
+    }
+
+    /// A client that answers every query from the local OSV index at `db`.
+    pub fn offline(db: OfflineDb) -> Self {
+        Self::default().with_offline_db(db)
     }
 
     /// Overrides the initial retry delay (the delay doubles per retry).
@@ -346,6 +371,12 @@ impl OsvClient {
         ecosystem: Ecosystem,
         version: &str,
     ) -> Result<OsvQueryResponse, OsvClientError> {
+        if let Some(db) = &self.offline_db {
+            return db
+                .query(package_name, ecosystem, version)
+                .map_err(OsvClientError::OfflineDb);
+        }
+
         if let Some(hit) = self
             .cache
             .as_ref()

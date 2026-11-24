@@ -32,6 +32,8 @@ Examples:
   depradar scan .                        Scan every lockfile in a directory or monorepo
   depradar scan . --offline              Typosquat checks only, no OSV lookup
   depradar scan . --deep                 Also run behavioral checks on each dependency
+  depradar db update                     Download and index the OSV dumps locally
+  depradar scan . --offline-db           Scan using the local OSV database
   depradar explain GHSA-xxxx-xxxx-xxxx   Show details for one advisory
   depradar --format json scan . | jq     Machine-readable output for CI
   depradar watch --registry npm          Watch the npm registry and score new packages
@@ -99,6 +101,11 @@ enum Command {
         /// The package name to check, e.g. `expresss`
         package: String,
     },
+    /// Manage the local OSV database used by `scan --offline-db`
+    Db {
+        #[command(subcommand)]
+        command: DbCommand,
+    },
     /// Scan a lockfile, or every lockfile under a directory
     Scan {
         /// A lockfile (package-lock.json, npm-shrinkwrap.json,
@@ -111,6 +118,10 @@ enum Command {
         /// and inspects install scripts and obfuscation)
         #[arg(long)]
         deep: bool,
+        /// Use the local OSV database (see `depradar db update`) instead of
+        /// calling osv.dev. Implies no network access for vulnerability data.
+        #[arg(long)]
+        offline_db: bool,
         /// Glob patterns for paths to skip (may be repeated). Overrides
         /// `exclude` in `depradar.toml`.
         #[arg(long = "exclude", value_name = "GLOB")]
@@ -159,6 +170,22 @@ enum CacheAction {
     Info,
     /// Delete the cache directory
     Clear,
+}
+
+/// Subcommands for managing the local OSV database.
+#[derive(Debug, Subcommand)]
+enum DbCommand {
+    /// Download and index the OSV ecosystem dumps into the local database
+    Update {
+        /// Directory to store the local database in. Defaults to
+        /// `$DEPRADAR_DB_DIR`, or the platform data directory.
+        #[arg(long, value_name = "DIR")]
+        dir: Option<PathBuf>,
+        /// Restrict the download to these ecosystems (may be repeated).
+        /// Defaults to every supported ecosystem.
+        #[arg(long = "ecosystem", value_name = "ECOSYSTEM")]
+        ecosystems: Vec<String>,
+    },
 }
 
 /// Package registry to watch.
@@ -329,10 +356,14 @@ fn main() -> ExitCode {
         }
         Command::RepoBounty(args) => repo_result(repo_commands::bounty(args)),
         Command::Name { package } => run_name(&package, cli.format.unwrap_or(Format::Text)),
+        Command::Db { command } => match command {
+            DbCommand::Update { dir, ecosystems } => run_db_update(dir, &ecosystems),
+        },
         Command::Scan {
             path,
             offline,
             deep,
+            offline_db,
             exclude,
             ecosystems,
             changed_since,
@@ -348,6 +379,7 @@ fn main() -> ExitCode {
                 &path,
                 offline,
                 deep,
+                offline_db,
                 cli.quiet,
                 changed_since.as_deref(),
                 &config.exclude,
@@ -612,6 +644,54 @@ fn glob_match_inner(pattern: &[u8], text: &[u8]) -> bool {
     }
 }
 
+/// Downloads and indexes the OSV ecosystem dumps into the local database.
+fn run_db_update(dir: Option<PathBuf>, ecosystems: &[String]) -> ExitCode {
+    let db_dir = match dir {
+        Some(dir) => dir,
+        None => match deprader::cve::offline_db::default_db_dir() {
+            Ok(dir) => dir,
+            Err(err) => {
+                eprintln!("error: {err}");
+                return ExitCode::from(2);
+            }
+        },
+    };
+
+    let selected = if ecosystems.is_empty() {
+        deprader::cve::offline_db::supported_ecosystems()
+    } else {
+        ecosystems
+            .iter()
+            .filter_map(|name| Ecosystem::from_ref_str(name))
+            .collect::<Vec<_>>()
+    };
+    if selected.is_empty() {
+        eprintln!("error: no supported ecosystems selected");
+        return ExitCode::from(2);
+    }
+
+    eprintln!(
+        "Updating local OSV database in {} ({} ecosystem(s))…",
+        db_dir.display(),
+        selected.len()
+    );
+    match deprader::cve::offline_db::update(&db_dir, &selected) {
+        Ok(summary) => {
+            eprintln!(
+                "Indexed {} advisories across {} ecosystem(s) into {}",
+                summary.advisories,
+                summary.ecosystems,
+                db_dir.display()
+            );
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("error: {err}");
+            ExitCode::from(2)
+        }
+    }
+}
+
 /// Scans `path` as a single lockfile or, for a directory, every lockfile
 /// under it, honouring a `.depradarignore` next to the lockfile (or at the
 /// directory's root).
@@ -619,6 +699,7 @@ fn scan(
     path: &Path,
     offline: bool,
     deep: bool,
+    offline_db: bool,
     quiet: bool,
     changed_since: Option<&str>,
     exclude: &[String],
@@ -652,6 +733,11 @@ fn scan(
     };
     if offline {
         opts.advisories = None;
+    } else if offline_db {
+        let db_dir = deprader::cve::offline_db::default_db_dir().map_err(|err| err.to_string())?;
+        let index = deprader::cve::offline_db::OfflineDb::open(&db_dir)
+            .map_err(|err| format!("{}: {err}", db_dir.display()))?;
+        opts.advisories = Some(Box::new(index));
     }
     if quiet {
         opts.show_progress = false;

@@ -7,6 +7,15 @@ export interface Signal {
   detail: string;
 }
 
+/** One candidate the scanner compared against; mirrors `Match` in crates/typosquat-wasm. */
+export interface Match {
+  name: string;
+  /** Levenshtein distance from the scanned name; 0 for an exact match. */
+  distance: number;
+  /** 0 (no signal) to 100. */
+  confidence: number;
+}
+
 /** The scanner's verdict for a package; mirrors `Detection` in crates/typosquat-wasm. */
 export interface Detection {
   candidate: string;
@@ -14,6 +23,8 @@ export interface Detection {
   /** 0 (no signal) to 100. */
   confidence: number;
   signals: Signal[];
+  /** Top-N closest known packages, best first. */
+  matches: Match[];
 }
 
 /** The wasm-bindgen exports of `crates/typosquat-wasm` (built with `--target web`). */
