@@ -35,6 +35,85 @@ pub fn fix_for(vuln: &OsvVulnerability, package: &str, scanned: &str) -> Option<
         .find(|v| compare_for(pypi, v, scanned) == Ordering::Greater)
 }
 
+/// A remediation recommendation: the primary fix plus an optional
+/// alternative that requires a major-version bump.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Remediation {
+    /// The lowest fixed version above `scanned` within the same major
+    /// version, if one exists.
+    pub primary: Option<String>,
+    /// The lowest fixed version above `scanned` in a higher major
+    /// version, if one exists.
+    pub alternative: Option<String>,
+}
+
+impl Remediation {
+    /// The best version to suggest: the in-major fix if available,
+    /// otherwise the next-major fix.
+    pub fn suggested(&self) -> Option<&str> {
+        self.primary
+            .as_deref()
+            .or(self.alternative.as_deref())
+    }
+}
+
+/// Computes a [`Remediation`] for `package` in `vuln` given the
+/// `scanned` version.
+///
+/// The primary recommendation is the lowest fixed version above
+/// `scanned` that stays within the same major version. The alternative
+/// is the lowest fixed version above `scanned` in a higher major
+/// version, so callers can offer "upgrade to N.0.0" as a fallback.
+pub fn remediation_for(vuln: &OsvVulnerability, package: &str, scanned: &str) -> Remediation {
+    let pypi = is_pypi(vuln, package);
+    let scanned_major = major_of(pypi, scanned);
+    let mut primary = None;
+    let mut alternative = None;
+    for v in fixed_versions(vuln, package) {
+        if compare_for(pypi, &v, scanned) != Ordering::Greater {
+            continue;
+        }
+        let v_major = major_of(pypi, &v);
+        match (scanned_major, v_major) {
+            (Some(sm), Some(vm)) if vm == sm => {
+                if primary.is_none() {
+                    primary = Some(v);
+                }
+            }
+            (Some(sm), Some(vm)) if vm > sm => {
+                if alternative.is_none() {
+                    alternative = Some(v);
+                }
+            }
+            // Unknown major on either side: treat as a same-major fix so
+            // the caller still gets a suggestion.
+            _ => {
+                if primary.is_none() {
+                    primary = Some(v);
+                }
+            }
+        }
+        if primary.is_some() && alternative.is_some() {
+            break;
+        }
+    }
+    Remediation {
+        primary,
+        alternative,
+    }
+}
+
+/// The major version of `version`, or `None` if it cannot be parsed.
+fn major_of(pypi: bool, version: &str) -> Option<u64> {
+    if pypi {
+        Pep440::parse(version).map(|p| p.release.first().copied().unwrap_or(0))
+    } else {
+        let v = version.trim_start_matches('v');
+        let core = v.split(['-', '+']).next().unwrap_or(v);
+        core.split('.').next().and_then(|p| p.parse().ok())
+    }
+}
+
 /// Whether `package` in `vuln` belongs to the PyPI ecosystem, in which
 /// case PEP 440 ordering applies.
 fn is_pypi(vuln: &OsvVulnerability, package: &str) -> bool {
@@ -432,6 +511,31 @@ mod tests {
         assert_eq!(compare_pep440("1.0", "1.0.0"), Ordering::Equal);
         assert!(compare_pep440("1.0+local", "1.0").is_gt());
         assert!(compare_pep440("1.0+1", "1.0+abc").is_gt());
+    }
+
+    #[test]
+    fn remediation_prefers_in_major_fix_with_next_major_alternative() {
+        let v: OsvVulnerability = serde_json::from_str(
+            r#"{"id":"X","affected":[{"package":{"name":"p","ecosystem":"npm"},"ranges":[
+                {"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.5"},
+                                           {"introduced":"2.0.0"},{"fixed":"2.0.3"}]}]}]}"#,
+        )
+        .unwrap();
+        let r = remediation_for(&v, "p", "1.0.0");
+        assert_eq!(r.primary.as_deref(), Some("1.2.5"));
+        assert_eq!(r.alternative.as_deref(), Some("2.0.3"));
+        assert_eq!(r.suggested(), Some("1.2.5"));
+
+        // Already on 2.x: the 2.0.3 fix is in-major, no alternative.
+        let r = remediation_for(&v, "p", "2.0.0");
+        assert_eq!(r.primary.as_deref(), Some("2.0.3"));
+        assert_eq!(r.alternative, None);
+
+        // Already fixed: nothing to suggest.
+        let r = remediation_for(&v, "p", "2.0.3");
+        assert_eq!(r.primary, None);
+        assert_eq!(r.alternative, None);
+        assert_eq!(r.suggested(), None);
     }
 
     #[test]

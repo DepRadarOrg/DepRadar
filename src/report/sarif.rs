@@ -188,6 +188,7 @@ fn result(
     );
     properties.insert("malicious".into(), json!(malicious));
     properties.insert("tags".into(), json!(tags));
+    let mut message = format!("[{}] {finding}", label(severity));
     if let FindingKind::Vulnerability {
         known_exploited,
         epss_score,
@@ -200,13 +201,25 @@ fn result(
         if let Some(epss_score) = epss_score {
             properties.insert("epss_score".into(), json!(epss_score));
         }
+        if let Some(published) = advisories.published(advisory) {
+            properties.insert("published".into(), json!(published));
+        }
+        if let Some(remediation) = advisories.remediation(advisory) {
+            if let Some(fix) = &remediation.in_major {
+                properties.insert("fixed_version".into(), json!(fix));
+            }
+            if let Some(alternative) = &remediation.major_upgrade {
+                properties.insert("major_upgrade".into(), json!(alternative));
+            }
+            message.push_str(&format!(" ({remediation})"));
+        }
     }
 
     json!({
         "ruleId": RULES[index].id,
         "ruleIndex": index,
         "level": level(severity),
-        "message": { "text": format!("[{}] {finding}", label(severity)) },
+        "message": { "text": message },
         "locations": [{
             "physicalLocation": {
                 "artifactLocation": { "uri": uri, "index": 0 },

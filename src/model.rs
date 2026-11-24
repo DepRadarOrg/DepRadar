@@ -46,7 +46,12 @@ pub enum FindingKind {
         homoglyph_match: Option<String>,
     },
     /// OSV reports a known vulnerability affecting this exact version.
-    Vulnerability { advisory_id: String },
+    /// `published` is the advisory's publish date (RFC 3339), when OSV
+    /// provides one.
+    Vulnerability {
+        advisory_id: String,
+        published: Option<String>,
+    },
     /// The pinned version was yanked from crates.io or deprecated on npm.
     /// `message` carries the registry's deprecation note when one exists.
     Deprecated { message: Option<String> },
@@ -79,6 +84,9 @@ pub struct Finding {
     /// The FIRST EPSS exploit-probability score (0.0–1.0) for this finding's
     /// CVE alias, if one is available.
     pub epss_score: Option<f64>,
+    /// When the advisory behind a [`FindingKind::Vulnerability`] was
+    /// published (RFC 3339), if OSV provided a date.
+    pub published: Option<String>,
 }
 
 impl fmt::Display for Finding {
@@ -110,7 +118,7 @@ impl fmt::Display for Finding {
                 }
                 write!(f, "{})", reasons.join("; "))
             }
-            FindingKind::Vulnerability { advisory_id } => {
+            FindingKind::Vulnerability { advisory_id, .. } => {
                 write!(f, ": known vulnerability {advisory_id}")
             }
             FindingKind::Deprecated { message } => match message {
@@ -226,7 +234,7 @@ impl From<&Finding> for IssueRef {
                     .map(|(name, _)| name.clone())
                     .or_else(|| homoglyph_match.clone()),
             ),
-            FindingKind::Vulnerability { advisory_id } => {
+            FindingKind::Vulnerability { advisory_id, .. } => {
                 (IssueKind::Vulnerability, Some(advisory_id.clone()))
             }
             FindingKind::Deprecated { .. } => (IssueKind::Deprecated, None),
@@ -425,6 +433,7 @@ mod tests {
             },
             known_exploited: false,
             epss_score: None,
+            published: None,
         };
         assert_eq!(finding.issue_ref(), "npm:expresss@1.0.0#typosquat:express");
     }

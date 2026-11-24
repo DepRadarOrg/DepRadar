@@ -179,6 +179,8 @@ pub struct OsvVulnerability {
     #[serde(default)]
     pub aliases: Vec<String>,
     pub modified: Option<String>,
+    /// When the advisory was first published, as an RFC 3339 timestamp
+    /// (e.g. `2020-06-01T00:00:00Z`). Absent for some records.
     pub published: Option<String>,
     #[serde(default)]
     pub severity: Vec<OsvSeverity>,
@@ -208,6 +210,17 @@ impl OsvVulnerability {
     /// [`is_malicious_advisory`]).
     pub fn is_malicious(&self) -> bool {
         is_malicious_advisory(&self.id)
+    }
+
+    /// The advisory's publish timestamp, parsed from [`Self::published`].
+    ///
+    /// Returns `None` when the field is absent or isn't a valid RFC 3339
+    /// timestamp.
+    pub fn published_at(&self) -> Option<SystemTime> {
+        self.published
+            .as_deref()
+            .and_then(|raw| chrono::DateTime::parse_from_rfc3339(raw).ok())
+            .map(SystemTime::from)
     }
 }
 
@@ -821,6 +834,25 @@ mod tests {
         let ghsa: OsvVulnerability =
             serde_json::from_str(r#"{"id":"GHSA-29mw-wpgm-hmr9"}"#).unwrap();
         assert!(!ghsa.is_malicious());
+    }
+
+    #[test]
+    fn vulnerability_parses_published_timestamp() {
+        let vuln: OsvVulnerability = serde_json::from_str(
+            r#"{"id":"GHSA-29mw-wpgm-hmr9","published":"2020-06-01T00:00:00Z"}"#,
+        )
+        .unwrap();
+        assert_eq!(vuln.published.as_deref(), Some("2020-06-01T00:00:00Z"));
+        assert!(vuln.published_at().is_some());
+
+        let no_published: OsvVulnerability =
+            serde_json::from_str(r#"{"id":"GHSA-29mw-wpgm-hmr9"}"#).unwrap();
+        assert!(no_published.published.is_none());
+        assert!(no_published.published_at().is_none());
+
+        let invalid: OsvVulnerability =
+            serde_json::from_str(r#"{"id":"X","published":"not-a-date"}"#).unwrap();
+        assert!(invalid.published_at().is_none());
     }
 
     #[test]

@@ -31,6 +31,7 @@ Examples:
   depradar scan package-lock.json        Scan a lockfile for typosquats and known CVEs
   depradar scan .                        Scan every lockfile in a directory or monorepo
   depradar scan . --offline              Typosquat checks only, no OSV lookup
+  depradar scan . --deep                 Also run behavioral checks on each dependency
   depradar db update                     Download and index the OSV dumps locally
   depradar scan . --offline-db           Scan using the local OSV database
   depradar explain GHSA-xxxx-xxxx-xxxx   Show details for one advisory
@@ -113,6 +114,10 @@ enum Command {
         /// Skip the OSV vulnerability lookup (typosquat checks only)
         #[arg(long)]
         offline: bool,
+        /// Run behavioral checks on each dependency (downloads npm tarballs
+        /// and inspects install scripts and obfuscation)
+        #[arg(long)]
+        deep: bool,
         /// Use the local OSV database (see `depradar db update`) instead of
         /// calling osv.dev. Implies no network access for vulnerability data.
         #[arg(long)]
@@ -357,6 +362,7 @@ fn main() -> ExitCode {
         Command::Scan {
             path,
             offline,
+            deep,
             offline_db,
             exclude,
             ecosystems,
@@ -372,6 +378,7 @@ fn main() -> ExitCode {
             match scan(
                 &path,
                 offline,
+                deep,
                 offline_db,
                 cli.quiet,
                 changed_since.as_deref(),
@@ -691,6 +698,7 @@ fn run_db_update(dir: Option<PathBuf>, ecosystems: &[String]) -> ExitCode {
 fn scan(
     path: &Path,
     offline: bool,
+    deep: bool,
     offline_db: bool,
     quiet: bool,
     changed_since: Option<&str>,
@@ -733,6 +741,9 @@ fn scan(
     }
     if quiet {
         opts.show_progress = false;
+    }
+    if deep {
+        opts.deep = true;
     }
 
     if path.is_dir() {
