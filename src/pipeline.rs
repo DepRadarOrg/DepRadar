@@ -71,6 +71,10 @@ pub struct ScanOptions<'a> {
     /// Whether to show progress indicators on stderr. Automatically disabled
     /// when stderr is not a TTY.
     pub show_progress: bool,
+    /// Run behavioral checks (install scripts, obfuscation) on each npm
+    /// dependency's tarball. Downloads are bounded in concurrency and use the
+    /// shared polite HTTP client.
+    pub deep: bool,
 }
 
 impl Default for ScanOptions<'_> {
@@ -85,6 +89,7 @@ impl Default for ScanOptions<'_> {
             ignore: None,
             today: None,
             show_progress: io::stderr().is_terminal(),
+            deep: false,
         }
     }
 }
@@ -380,6 +385,13 @@ pub fn scan_lockfile(path: impl AsRef<Path>, opts: &ScanOptions<'_>) -> Result<R
             }
             finish_stage("deprecation");
         }
+    }
+
+    // Behavioral checks (issue #353): download each npm tarball and run the
+    // behavioral detectors. Bounded concurrency, shared polite HTTP client.
+    if opts.deep {
+        findings.extend(run_behavioral_checks(&packages, opts));
+        finish_stage("behavioral");
     }
 
     // License policy check (issue #179).
@@ -707,6 +719,87 @@ fn dedupe(dependencies: Vec<Dependency>) -> Vec<Dependency> {
     unique
 }
 
+/// Maximum number of tarball downloads / behavioral scans in flight at once.
+const DEEP_CONCURRENCY: usize = 8;
+
+/// Runs the behavioral detectors over every npm dependency's tarball,
+/// returning the resulting findings. Downloads are bounded by
+/// [`DEEP_CONCURRENCY`] and go through the shared polite HTTP client.
+fn run_behavioral_checks(packages: &[Dependency], opts: &ScanOptions<'_>) -> Vec<Finding> {
+    use crate::behavioral::detectors::run_all_detectors;
+    use crate::behavioral::tarball::download_and_extract;
+    use std::sync::Mutex;
+
+    let npm: Vec<&Dependency> = packages
+        .iter()
+        .filter(|dependency| {
+            dependency.ecosystem == Ecosystem::Npm && dependency.version.is_some()
+        })
+        .collect();
+    if npm.is_empty() {
+        return Vec::new();
+    }
+
+    let progress = if opts.show_progress {
+        let pb = ProgressBar::new(npm.len() as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{msg} [{bar:40.cyan/blue}] {pos}/{len} packages")
+                .expect("valid template")
+                .progress_chars("#>-"),
+        );
+        pb.set_message("Running behavioral checks");
+        Some(pb)
+    } else {
+        None
+    };
+
+    let semaphore = std::sync::Arc::new(std::sync::Mutex::new(()));
+    let _ = semaphore;
+    let next = Mutex::new(0usize);
+    let results: Mutex<Vec<Finding>> = Mutex::new(Vec::new());
+
+    std::thread::scope(|scope| {
+        let workers = DEEP_CONCURRENCY.min(npm.len());
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                let index = {
+                    let mut guard = next.lock().unwrap();
+                    let index = *guard;
+                    *guard += 1;
+                    index
+                };
+                let Some(dependency) = npm.get(index) else {
+                    break;
+                };
+                let Some(version) = dependency.version.as_deref() else {
+                    continue;
+                };
+                let Ok(extracted) = download_and_extract(&dependency.name, version) else {
+                    if let Some(pb) = &progress {
+                        pb.inc(1);
+                    }
+                    continue;
+                };
+                let detected = run_all_detectors(&extracted);
+                let mut findings = results.lock().unwrap();
+                for kind in detected {
+                    findings.push(finding(dependency, kind));
+                }
+                if let Some(pb) = &progress {
+                    pb.inc(1);
+                }
+            });
+        }
+    });
+
+    if let Some(pb) = &progress {
+        pb.finish_and_clear();
+    }
+
+    results.into_inner().unwrap()
+}
+
 fn finding(dependency: &Dependency, kind: FindingKind) -> Finding {
     Finding {
         package: dependency.name.clone(),
@@ -928,6 +1021,7 @@ mod deprecation_license_tests {
             ignore: None,
             today: None,
             show_progress: false,
+            deep: false,
         };
 
         let report = scan_lockfile(&path, &opts).unwrap();
@@ -974,6 +1068,7 @@ version = "0.1.0"
             ignore: None,
             today: None,
             show_progress: false,
+            deep: false,
         };
 
         let report = scan_lockfile(&path, &opts).unwrap();
@@ -1000,6 +1095,7 @@ version = "0.1.0"
             ignore: None,
             today: None,
             show_progress: false,
+            deep: false,
         };
 
         let report = scan_lockfile(&path, &opts).unwrap();
@@ -1033,6 +1129,7 @@ version = "0.1.0"
             ignore: None,
             today: None,
             show_progress: false,
+            deep: false,
         };
 
         let report = scan_lockfile(&path, &opts).unwrap();

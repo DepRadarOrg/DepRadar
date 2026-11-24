@@ -1949,6 +1949,52 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Closes:** #349
 - **Status:** In review.
 
+### CVE — Suggest the smallest non-breaking upgrade — #351
+
+- **What:** [`src/cve/remediation.rs`](src/cve/remediation.rs) now prefers the
+  lowest fixed version within the installed major version when an advisory
+  lists several fixed versions, so a `lodash@4.17.4` finding suggests
+  `4.17.21` rather than `5.0.0`. When a fix exists in a later major, the
+  major-version upgrade is reported as an alternative alongside the
+  in-major fix. [`src/report/`](src/report/) renders the primary suggestion
+  and the alternative in the text and JSON output.
+- **Tests:** A remediation test uses an advisory fixed in two majors and
+  asserts the in-major fix is chosen with the major bump listed as the
+  alternative; a report test checks both appear in the output.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #351
+- **Status:** In review.
+
+### CVE — Show advisory publish date and age — #352
+
+- **What:** [`src/cve/osv_client.rs`](src/cve/osv_client.rs) reads the
+  `published` timestamp from the OSV response into the vulnerability model.
+  [`src/report/text.rs`](src/report/text.rs) prints "published N days ago"
+  for each finding, and the JSON report includes the raw `published` date.
+- **Tests:** A snapshot test covers a report whose finding carries a
+  `published` date, including the new text line and the JSON field.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #352
+- **Status:** In review.
+
+### Behavioral — `depradar scan --deep` runs behavioral checks on each dependency — #353
+
+- **What:** Adds a `--deep` flag to `depradar scan`
+  ([`src/bin/depradar.rs`](src/bin/depradar.rs)). With it,
+  [`src/pipeline.rs`](src/pipeline.rs) downloads each npm dependency's
+  tarball and runs the detectors in [`src/behavioral/`](src/behavioral/), so
+  install scripts and obfuscation in dependencies are reported. Downloads go
+  through the existing polite HTTP client and are limited to a small number
+  of concurrent fetches.
+- **Tests:** A mock-registry test serves a dependency whose tarball contains
+  a malicious `postinstall` script and asserts `scan --deep` reports it.
+- **Verified:** `cargo fmt`, `cargo clippy -- -D warnings` and
+  `cargo test --workspace` pass.
+- **Closes:** #353
+- **Status:** In review.
+
 ### CVE — PEP 440 version comparison for PyPI fixed versions — #350
 
 - **What:** Adds PEP 440 ordering to [`src/cve/remediation.rs`](src/cve/remediation.rs)

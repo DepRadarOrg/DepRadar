@@ -31,6 +31,7 @@ Examples:
   depradar scan package-lock.json        Scan a lockfile for typosquats and known CVEs
   depradar scan .                        Scan every lockfile in a directory or monorepo
   depradar scan . --offline              Typosquat checks only, no OSV lookup
+  depradar scan . --deep                 Also run behavioral checks on each dependency
   depradar explain GHSA-xxxx-xxxx-xxxx   Show details for one advisory
   depradar --format json scan . | jq     Machine-readable output for CI
   depradar watch --registry npm          Watch the npm registry and score new packages
@@ -106,6 +107,10 @@ enum Command {
         /// Skip the OSV vulnerability lookup (typosquat checks only)
         #[arg(long)]
         offline: bool,
+        /// Run behavioral checks on each dependency (downloads npm tarballs
+        /// and inspects install scripts and obfuscation)
+        #[arg(long)]
+        deep: bool,
         /// Glob patterns for paths to skip (may be repeated). Overrides
         /// `exclude` in `depradar.toml`.
         #[arg(long = "exclude", value_name = "GLOB")]
@@ -327,6 +332,7 @@ fn main() -> ExitCode {
         Command::Scan {
             path,
             offline,
+            deep,
             exclude,
             ecosystems,
             changed_since,
@@ -341,6 +347,7 @@ fn main() -> ExitCode {
             match scan(
                 &path,
                 offline,
+                deep,
                 cli.quiet,
                 changed_since.as_deref(),
                 &config.exclude,
@@ -611,6 +618,7 @@ fn glob_match_inner(pattern: &[u8], text: &[u8]) -> bool {
 fn scan(
     path: &Path,
     offline: bool,
+    deep: bool,
     quiet: bool,
     changed_since: Option<&str>,
     exclude: &[String],
@@ -647,6 +655,9 @@ fn scan(
     }
     if quiet {
         opts.show_progress = false;
+    }
+    if deep {
+        opts.deep = true;
     }
 
     if path.is_dir() {

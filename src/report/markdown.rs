@@ -123,6 +123,50 @@ fn write_report(
     Ok(())
 }
 
+/// Writes the remediation recommendation, preferring the smallest
+/// non-breaking (in-major) upgrade and showing the next-major fix as an
+/// alternative when both exist.
+fn write_remediation(
+    out: &mut String,
+    remediation: &crate::cve::remediation::Remediation,
+) -> std::fmt::Result {
+    match (&remediation.in_major, &remediation.next_major) {
+        (Some(in_major), Some(next_major)) => {
+            writeln!(
+                out,
+                "\n**Recommendation**: Update to `{}` (fixes it within your current major version).",
+                in_major
+            )?;
+            writeln!(
+                out,
+                "\n_Alternative: upgrade to `{}` (next major version)._",
+                next_major
+            )?;
+        }
+        (Some(in_major), None) => {
+            writeln!(
+                out,
+                "\n**Recommendation**: Update to `{}`.",
+                in_major
+            )?;
+        }
+        (None, Some(next_major)) => {
+            writeln!(
+                out,
+                "\n**Recommendation**: Update to `{}` (requires a major version upgrade).",
+                next_major
+            )?;
+        }
+        (None, None) => {
+            writeln!(
+                out,
+                "\n**Recommendation**: Update to a patched version or find an alternative package."
+            )?;
+        }
+    }
+    Ok(())
+}
+
 fn format_ecosystem(ecosystem: &crate::model::Ecosystem) -> &'static str {
     match ecosystem {
         crate::model::Ecosystem::Npm => "npm",
@@ -172,6 +216,8 @@ fn write_finding_details(out: &mut String, finding: &crate::model::Finding) -> s
             advisory_id,
             known_exploited,
             epss_score,
+            published,
+            remediation,
         } => {
             writeln!(out, "#### Details\n")?;
             if is_malicious(finding) {
@@ -188,6 +234,9 @@ fn write_finding_details(out: &mut String, finding: &crate::model::Finding) -> s
                 "- **Reference**: [View on OSV](https://osv.dev/vulnerability/{})",
                 advisory_id
             )?;
+            if let Some(published) = published {
+                writeln!(out, "- **Published**: {}", published)?;
+            }
             if *known_exploited {
                 writeln!(
                     out,
@@ -203,10 +252,7 @@ fn write_finding_details(out: &mut String, finding: &crate::model::Finding) -> s
                     "\n**Recommendation**: Remove this dependency immediately and audit for compromise."
                 )?;
             } else {
-                writeln!(
-                    out,
-                    "\n**Recommendation**: Update to a patched version or find an alternative package."
-                )?;
+                write_remediation(out, remediation)?;
             }
         }
         FindingKind::Deprecated { .. } | FindingKind::License { .. } => {
@@ -275,6 +321,11 @@ mod tests {
                         advisory_id: "GHSA-29mw-wpgm-hmr9".to_string(),
                         known_exploited: false,
                         epss_score: None,
+                        published: Some("2021-05-06T00:00:00Z".to_string()),
+                        remediation: crate::cve::remediation::Remediation {
+                            in_major: Some("4.17.21".to_string()),
+                            next_major: Some("5.0.0".to_string()),
+                        },
                     },
                 },
             ],
@@ -311,6 +362,8 @@ mod tests {
                     advisory_id: "MAL-2024-1234".to_string(),
                     known_exploited: false,
                     epss_score: None,
+                    published: None,
+                    remediation: crate::cve::remediation::Remediation::default(),
                 },
             }],
             suppressed: vec![],
@@ -341,5 +394,61 @@ mod tests {
 
         let output = render(&report, &advisories);
         insta::assert_snapshot!(output);
+    }
+
+    #[test]
+    fn remediation_shows_in_major_fix_with_next_major_alternative() {
+        let report = make_test_report();
+        let output = render(&report, &AdvisorySeverities::default());
+
+        // The in-major fix is the primary recommendation.
+        assert!(output.contains("Update to `4.17.21`"));
+        // The next-major fix is shown as an alternative.
+        assert!(output.contains("Alternative: upgrade to `5.0.0`"));
+    }
+
+    #[test]
+    fn remediation_shows_only_next_major_when_no_in_major_fix() {
+        use crate::pipeline::Summary;
+        use std::path::PathBuf;
+
+        let report = crate::pipeline::Report {
+            path: PathBuf::from("package-lock.json"),
+            ecosystem: Ecosystem::Npm,
+            findings: vec![Finding {
+                package: "some-pkg".to_string(),
+                version: Some("1.0.0".to_string()),
+                ecosystem: Ecosystem::Npm,
+                direct: true,
+                path: vec![],
+                kind: FindingKind::Vulnerability {
+                    advisory_id: "GHSA-xxxx-yyyy-zzzz".to_string(),
+                    known_exploited: false,
+                    epss_score: None,
+                    published: None,
+                    remediation: crate::cve::remediation::Remediation {
+                        in_major: None,
+                        next_major: Some("2.0.0".to_string()),
+                    },
+                },
+            }],
+            suppressed: vec![],
+            warnings: vec![],
+            summary: Summary {
+                packages: 1,
+                queried: 1,
+                typosquats: 0,
+                vulnerabilities: 1,
+                suppressed: 0,
+                warnings: 0,
+            },
+            dependencies: vec![],
+            timings: vec![],
+        };
+
+        let output = render(&report, &AdvisorySeverities::default());
+        assert!(output.contains("Update to `2.0.0`"));
+        assert!(output.contains("requires a major version upgrade"));
+        assert!(!output.contains("Alternative:"));
     }
 }

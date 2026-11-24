@@ -9,6 +9,7 @@
 //! stage took (`--verbose`).
 
 use std::fmt::Write;
+use std::time::{Duration, SystemTime};
 
 use owo_colors::OwoColorize;
 
@@ -90,12 +91,32 @@ fn known_exploited_tag(color: bool) -> String {
     }
 }
 
-/// Renders a single finding line, including the KEV marker and EPSS score
-/// when present.
+/// Whole days between `published` and `now`, saturating at zero for
+/// timestamps in the future.
+fn age_in_days(published: SystemTime, now: SystemTime) -> u64 {
+    now.duration_since(published)
+        .unwrap_or(Duration::ZERO)
+        .as_secs()
+        / 86_400
+}
+
+/// `published N days ago`, with singular/plural handled.
+fn published_label(published: SystemTime, now: SystemTime) -> String {
+    let days = age_in_days(published, now);
+    if days == 1 {
+        "published 1 day ago".to_string()
+    } else {
+        format!("published {days} days ago")
+    }
+}
+
+/// Renders a single finding line, including the KEV marker, EPSS score and
+/// advisory publish age when present.
 fn finding_line(
     finding: &crate::pipeline::Finding,
     severity: Severity,
     color: bool,
+    now: SystemTime,
 ) -> String {
     let mut line = format!("{} {finding}", tag(severity, color));
     if is_malicious(finding) {
@@ -108,6 +129,9 @@ fn finding_line(
     }
     if let Some(epss) = finding.epss {
         let _ = write!(line, " (EPSS: {epss:.2})");
+    }
+    if let Some(published) = finding.published {
+        let _ = write!(line, " ({})", published_label(published, now));
     }
     line
 }
@@ -126,10 +150,11 @@ fn write_report(
     advisories: &AdvisorySeverities,
     opts: &TextOptions,
 ) -> std::fmt::Result {
+    let now = SystemTime::now();
     if opts.verbosity == Verbosity::Quiet {
         for finding in &report.findings {
             let severity = severity_of(finding, advisories);
-            writeln!(out, "{}", finding_line(finding, severity, opts.color))?;
+            writeln!(out, "{}", finding_line(finding, severity, opts.color, now))?;
         }
         return writeln!(out, "{}", summary_line(report));
     }
@@ -169,7 +194,11 @@ fn write_report(
         writeln!(out, "\nFindings ({}):", report.findings.len())?;
         for finding in &report.findings {
             let severity = severity_of(finding, advisories);
-            writeln!(out, "  - {}", finding_line(finding, severity, opts.color))?;
+            writeln!(
+                out,
+                "  - {}",
+                finding_line(finding, severity, opts.color, now)
+            )?;
         }
     }
 
@@ -379,5 +408,59 @@ mod tests {
         let text = render(&report, &advisories, &opts);
         assert!(!text.contains("[KNOWN EXPLOITED]"));
         assert!(!text.contains("EPSS:"));
+    }
+
+    #[test]
+    fn age_in_days_counts_whole_days() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10 * 86_400 + 5_000);
+        let published = SystemTime::UNIX_EPOCH + Duration::from_secs(3 * 86_400);
+        assert_eq!(age_in_days(published, now), 7);
+    }
+
+    #[test]
+    fn age_in_days_saturates_for_future_dates() {
+        let now = SystemTime::UNIX_EPOCH;
+        let published = SystemTime::UNIX_EPOCH + Duration::from_secs(86_400);
+        assert_eq!(age_in_days(published, now), 0);
+    }
+
+    #[test]
+    fn published_label_handles_singular_and_plural() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10 * 86_400);
+        let one_day = SystemTime::UNIX_EPOCH + Duration::from_secs(9 * 86_400);
+        let many_days = SystemTime::UNIX_EPOCH + Duration::from_secs(3 * 86_400);
+        assert_eq!(published_label(one_day, now), "published 1 day ago");
+        assert_eq!(published_label(many_days, now), "published 7 days ago");
+    }
+
+    #[test]
+    fn renders_published_age_on_finding_line() {
+        let mut finding = sample_finding();
+        finding.published = Some(SystemTime::now() - Duration::from_secs(3 * 86_400));
+        let report = sample_report(finding);
+        let advisories = AdvisorySeverities::default();
+        for verbosity in [Verbosity::Quiet, Verbosity::Normal] {
+            let opts = TextOptions {
+                color: false,
+                verbosity,
+            };
+            let text = render(&report, &advisories, &opts);
+            assert!(
+                text.contains("published 3 days ago"),
+                "missing publish age in {verbosity:?}: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn omits_publish_age_when_absent() {
+        let report = sample_report(sample_finding());
+        let advisories = AdvisorySeverities::default();
+        let opts = TextOptions {
+            color: false,
+            verbosity: Verbosity::Normal,
+        };
+        let text = render(&report, &advisories, &opts);
+        assert!(!text.contains("published"), "{text}");
     }
 }
