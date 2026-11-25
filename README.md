@@ -286,6 +286,7 @@ verified, with the full trail auditable by anyone.
 - **[Architecture](docs/architecture.md)** — how components fit together, sequence diagrams, module responsibilities
 - **[Threat Model](docs/threat-model.md)** — security properties, trust assumptions, known attacks and mitigations
 - **[Tutorial](docs/tutorial.md)** — report your first typosquat from scan to payout
+- **[Glossary](docs/glossary.md)** — definitions for typosquat, combosquat, homoglyph, proof_ref, review_window and the rest of the vocabulary, each linked to its implementation
 - **[FAQ](docs/FAQ.md)** — common questions about bounties, findings, and deployment
 - **[Contract events](docs/events.md)** — topic and data layout of each `deprader_router` event, for indexers and the dashboard
 - **[API Documentation](https://depradarorg.github.io/DepRadar/api/)** — Rust API docs for the scanner toolkit

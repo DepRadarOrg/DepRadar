@@ -2082,3 +2082,23 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 - **By:** cyfer-codes
 - **Closes:** #348
 - **Status:** In review.
+
+### Docs — Glossary of domain terms — #450
+
+- **What:** `docs/glossary.md` defines the vocabulary the code and findings use
+  without explaining: typosquat, combosquat, homoglyph, Damerau-Levenshtein
+  distance, ecosystem-scoped scoring, `lockfile_ast`, `finding_kind`,
+  `suppression_rule`, `proof_ref`, `review_window` and the PROGRESS.md
+  requirement. Every entry carries a link to the file and symbol that
+  implements it, so the glossary doubles as a map into `src/`. Linked from the
+  README Documentation section.
+- **Tests:** Not applicable — documentation only. All internal links and
+  referenced paths were checked against the tree (`src/typosquat/scanner.rs`,
+  `src/typosquat/combosquat.rs`, `src/bin/depradar.rs`,
+  `src/bin/depradar/repo_commands.rs`, `src/pipeline.rs`,
+  `docs/issue-23-damerau-levenshtein.md`,
+  `docs/issue-24-ecosystem-scoped-scoring.md`,
+  `docs/issue-25-pypi-name-normalization.md` all resolve).
+- **By:** Qaz1853508
+- **Closes:** #450
+- **Status:** In review.
