@@ -10,6 +10,13 @@ is closed — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Entries
 
+### Frontend — Stellar Expert links for addresses and contract — #403
+
+- **What:** Replaced plain-text Stellar addresses and contract IDs across the dashboard with clickable Stellar Expert explorer links and copy buttons. Added modular `buildExplorerUrl`, `explorerBaseUrl`, and `createExplorerUrls` helpers in `frontend/src/config.ts` supporting both `testnet` and `public` (mainnet) networks. Added `ContractLink` component in `frontend/src/components/ui.tsx` and updated `AddressLink` to support copy functionality for contract addresses. Linked contract and admin IDs on the About page and account address on the Address page.
+- **Verified:** 13/13 Vitest suites (103/103 tests) passing including dedicated unit tests for the URL builder per network in `src/config.test.ts` and UI link behavior in `src/components/ui.test.tsx`. `npm run lint`, `typecheck`, and `build` succeed with 0 errors.
+- **By:** genda-benjamin
+- **Closes:** #403
+
 ### Devex — Replace `unwrap()` / `expect()` in `src/lockfile` non-test code — #444
 
 - **What:** Audited all non-test code across `src/lockfile/` (`mod.rs`, `cargo.rs`, `npm.rs`, `pnpm.rs`, `pypi.rs`, `yarn.rs`). Confirmed zero `unwrap()` or `expect()` calls exist outside `#[cfg(test)]`, with all parsers properly returning `Result<_, ParseError>` and `Result<_, LockfileError>`. Documented the unreachable match arm invariant in `src/lockfile/mod.rs` for early-returned lockfile kinds.
