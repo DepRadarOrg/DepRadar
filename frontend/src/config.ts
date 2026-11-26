@@ -81,13 +81,40 @@ export const RPC_URL: string = ACTIVE_NETWORK.rpcUrl;
 export const NETWORK: string = ACTIVE_NETWORK.id;
 export const NETWORK_PASSPHRASE: string = ACTIVE_NETWORK.passphrase;
 
-const EXPLORER = `https://stellar.expert/explorer/${ACTIVE_NETWORK.explorerNetwork}`;
+export type ExplorerNetwork = "testnet" | "public";
 
-export const explorer = {
-  contract: (id: string) => `${EXPLORER}/contract/${id}`,
-  account: (id: string) => `${EXPLORER}/account/${id}`,
-  tx: (hash: string) => `${EXPLORER}/tx/${hash}`,
-};
+export type ExplorerType = "account" | "contract" | "tx";
+
+/** Returns the base Stellar Expert explorer URL for the network. */
+export function explorerBaseUrl(
+  network: ExplorerNetwork | NetworkPreset["id"] = ACTIVE_NETWORK.explorerNetwork,
+): string {
+  const net = network === "mainnet" ? "public" : network;
+  return `https://stellar.expert/explorer/${net}`;
+}
+
+/** Builds a full Stellar Expert explorer URL for a given resource and network. */
+export function buildExplorerUrl(
+  type: ExplorerType,
+  id: string,
+  network: ExplorerNetwork | NetworkPreset["id"] = ACTIVE_NETWORK.explorerNetwork,
+): string {
+  const base = explorerBaseUrl(network);
+  return `${base}/${type}/${id}`;
+}
+
+/** Factory that creates explorer URL builders for a specific network. */
+export function createExplorerUrls(
+  network: ExplorerNetwork | NetworkPreset["id"] = ACTIVE_NETWORK.explorerNetwork,
+) {
+  return {
+    contract: (id: string) => buildExplorerUrl("contract", id, network),
+    account: (id: string) => buildExplorerUrl("account", id, network),
+    tx: (hash: string) => buildExplorerUrl("tx", hash, network),
+  };
+}
+
+export const explorer = createExplorerUrls(ACTIVE_NETWORK.explorerNetwork);
 
 /**
  * Native XLM's Stellar Asset Contract on the active network. Empty when a

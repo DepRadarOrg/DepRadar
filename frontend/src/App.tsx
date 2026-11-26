@@ -14,10 +14,8 @@ const BountyDetail = lazy(() => import("./pages/BountyDetail").then((m) => ({ de
 const BountyList = lazy(() => import("./pages/BountyList").then((m) => ({ default: m.BountyList })));
 const Leaderboard = lazy(() => import("./pages/Leaderboard").then((m) => ({ default: m.Leaderboard })));
 const NewBounty = lazy(() => import("./pages/NewBounty").then((m) => ({ default: m.NewBounty })));
-const Report = lazy(() => import("./pages/Report").then((m) => ({ default: m.Report })));
-const RepoScanReport = lazy(() =>
-  import("./pages/RepoScanReport").then((m) => ({ default: m.RepoScanReport })),
-);
+const Report = lazy(() => import("./pages/Report"));
+const RepoScanReport = lazy(() => import("./pages/Report"));
 
 /** Hash routing so the build works on any static host with no rewrite rules. */
 export default function App() {

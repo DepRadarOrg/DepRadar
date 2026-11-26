@@ -24,7 +24,7 @@ export interface Detection {
   confidence: number;
   signals: Signal[];
   /** Top-N closest known packages, best first. */
-  matches: Match[];
+  matches?: Match[];
 }
 
 /** The wasm-bindgen exports of `crates/typosquat-wasm` (built with `--target web`). */

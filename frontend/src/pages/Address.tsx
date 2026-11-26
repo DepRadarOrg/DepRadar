@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import { Empty, ErrorState, Identicon, Loading, StatusBadge } from "../components/ui";
+import { CopyButton, Empty, ErrorState, Identicon, Loading, StatusBadge } from "../components/ui";
+import { explorer } from "../config";
 import { listBounties, listClaims } from "../lib/contract";
 import { formatAmount, formatDate, tokenSymbol } from "../lib/format";
 import type { Bounty, Claim } from "../lib/types";
@@ -58,6 +59,19 @@ function AddressDetail({ address, activity }: { address: string; activity: Addre
         <div className="detail-hero-main">
           <h1 className="addr-title">
             <Identicon address={address} size={32} /> <span className="mono">{address}</span>
+            <a
+              className="address-explorer"
+              href={explorer.account(address)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View on Stellar Expert"
+              title="View on Stellar Expert"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
+              </svg>
+            </a>
+            <CopyButton value={address} label="Copy address" />
           </h1>
           <p className="muted">
             {activity.funded.length} funded · {activity.claimed.length} claims

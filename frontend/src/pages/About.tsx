@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { AddressLink, ContractLink } from "../components/ui";
 import { useAsync } from "../lib/useAsync";
 import {
   getAdmin,
@@ -21,7 +22,9 @@ export function About() {
         <h2 id="contract-heading">{t("about.contract")}</h2>
         <dl className="about-details">
           <dt>{t("about.contractId")}</dt>
-          <dd data-testid="contract-id">{CONTRACT_ID ?? t("about.unknown")}</dd>
+          <dd data-testid="contract-id">
+            {CONTRACT_ID ? <ContractLink contractId={CONTRACT_ID} copy full /> : t("about.unknown")}
+          </dd>
           <dt>{t("about.network")}</dt>
           <dd data-testid="network">{NETWORK ?? t("about.unknown")}</dd>
         </dl>
@@ -38,14 +41,18 @@ export function About() {
         {admin.status === "success" && (
           <dl className="about-details">
             <dt>{t("about.currentAdmin")}</dt>
-            <dd data-testid="current-admin">{admin.data ?? t("about.notSet")}</dd>
+            <dd data-testid="current-admin">
+              {admin.data ? <AddressLink address={admin.data} copy /> : t("about.notSet")}
+            </dd>
             <dt>{t("about.pendingAdmin")}</dt>
             <dd data-testid="pending-admin">
               {pendingAdmin.status === "loading"
                 ? t("about.loading")
                 : pendingAdmin.status === "error"
                   ? t("about.unavailable")
-                  : (pendingAdmin.data ?? t("about.none"))}
+                  : pendingAdmin.data
+                    ? <AddressLink address={pendingAdmin.data} copy />
+                    : t("about.none")}
             </dd>
           </dl>
         )}

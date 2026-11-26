@@ -56,10 +56,17 @@ export function AddressLink({
 
   // Contract addresses (e.g. tokens) have no profile page, so they link straight to the explorer.
   if (isContract) {
-    return (
+    const contractLink = (
       <a className="address" href={explorerHref} target="_blank" rel="noreferrer" title={address}>
         {content}
       </a>
+    );
+    if (!copy) return contractLink;
+    return (
+      <span className="address-copy">
+        {contractLink}
+        <CopyButton value={address} label="Copy address" />
+      </span>
     );
   }
 
@@ -89,6 +96,37 @@ export function AddressLink({
     <span className="address-copy">
       {link}
       <CopyButton value={address} label="Copy address" />
+    </span>
+  );
+}
+
+export function ContractLink({
+  contractId,
+  copy = false,
+  full = false,
+}: {
+  contractId: string;
+  copy?: boolean;
+  full?: boolean;
+}) {
+  const explorerHref = explorer.contract(contractId);
+  const content = <span className="mono">{full ? contractId : shortAddress(contractId)}</span>;
+  const link = (
+    <a
+      className="address contract-link"
+      href={explorerHref}
+      target="_blank"
+      rel="noreferrer"
+      title={contractId}
+    >
+      {content}
+    </a>
+  );
+  if (!copy) return link;
+  return (
+    <span className="address-copy">
+      {link}
+      <CopyButton value={contractId} label="Copy contract ID" />
     </span>
   );
 }
