@@ -47,7 +47,7 @@ jobs:
             # No report has cleared publication yet.
             target/debug/depradar repo-badge "$report" --public > "$badge"
           fi
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: frontend/dist
 
