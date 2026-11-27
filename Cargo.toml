@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = "30.0.0"
 
 # Root crate: the off-chain side of DepRadar (crawler + scanner modules).
 # The on-chain bounty router lives in its own crate under contracts/.
